@@ -1,7 +1,7 @@
-import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Send, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
   id: string;
@@ -13,10 +13,10 @@ interface Message {
 interface FormData {
   objective: string;
   targetAudience: string;
-  availableContent: string[];
+  availableContent: string;
   referenceLinks: string;
-  desiredSections: string[];
-  features: string[];
+  desiredSections: string;
+  features: string;
   domain: string;
   deadline: string;
   additionalInfo: string;
@@ -31,8 +31,7 @@ const STEPS = [
       'Captar leads',
       'Receber contatos pelo WhatsApp',
       'Gerar pedidos de orçamento',
-      'Apresentar serviços',
-      'Outro'
+      'Apresentar serviços'
     ],
     key: 'objective'
   },
@@ -45,8 +44,7 @@ const STEPS = [
       'Pessoas físicas',
       'Pequenos negócios',
       'Clínicas',
-      'Lojas',
-      'Outro'
+      'Lojas'
     ],
     key: 'targetAudience'
   },
@@ -62,14 +60,12 @@ const STEPS = [
       'Identidade visual',
       'Nenhum ainda'
     ],
-    key: 'availableContent',
-    multiple: true
+    key: 'availableContent'
   },
   {
     id: 'references',
     title: 'Sites de Referência',
     question: 'Envie links de sites que você gosta como referência (ou descreva o estilo)',
-    inputType: 'textarea',
     key: 'referenceLinks'
   },
   {
@@ -85,8 +81,7 @@ const STEPS = [
       'Formulário',
       'Botão WhatsApp'
     ],
-    key: 'desiredSections',
-    multiple: true
+    key: 'desiredSections'
   },
   {
     id: 'features',
@@ -99,8 +94,7 @@ const STEPS = [
       'Pixel de anúncios',
       'Google Analytics'
     ],
-    key: 'features',
-    multiple: true
+    key: 'features'
   },
   {
     id: 'domain',
@@ -119,14 +113,12 @@ const STEPS = [
     id: 'deadline',
     title: 'Prazo',
     question: 'Existe prazo para entrega do projeto?',
-    inputType: 'text',
     key: 'deadline'
   },
   {
     id: 'additional',
     title: 'Informações Adicionais',
     question: 'Há mais alguma coisa que você gostaria de nos informar?',
-    inputType: 'textarea',
     key: 'additionalInfo'
   }
 ];
@@ -137,10 +129,10 @@ export default function ChatForm() {
   const [formData, setFormData] = useState<FormData>({
     objective: '',
     targetAudience: '',
-    availableContent: [],
+    availableContent: '',
     referenceLinks: '',
-    desiredSections: [],
-    features: [],
+    desiredSections: '',
+    features: '',
     domain: '',
     deadline: '',
     additionalInfo: ''
@@ -173,40 +165,22 @@ export default function ChatForm() {
   }, []);
 
   const handleOptionClick = (option: string) => {
-    const step = STEPS[currentStep];
-    
-    if (step.multiple) {
-      const currentValue = formData[step.key as keyof FormData] as string[];
-      const newValue = currentValue.includes(option)
-        ? currentValue.filter(item => item !== option)
-        : [...currentValue, option];
-      setFormData(prev => ({
-        ...prev,
-        [step.key]: newValue
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [step.key]: option
-      }));
-      handleNextStep(option);
-    }
+    handleInputSubmit(option);
   };
 
   const handleInputSubmit = (value: string) => {
+    if (!value.trim()) return;
+
     const step = STEPS[currentStep];
     setFormData(prev => ({
       ...prev,
       [step.key]: value
     }));
-    handleNextStep(value);
-  };
 
-  const handleNextStep = (userResponse: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      content: userResponse,
+      content: value,
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMessage]);
@@ -247,25 +221,25 @@ ${formData.objective}
 ${formData.targetAudience}
 
 3. CONTEÚDO DISPONÍVEL
-${formData.availableContent.length > 0 ? formData.availableContent.join(', ') : 'Nenhum'}
+${formData.availableContent}
 
 4. SITES DE REFERÊNCIA
-${formData.referenceLinks || 'Nenhum informado'}
+${formData.referenceLinks}
 
-5. SEÇÕES DESEJADAS
-${formData.desiredSections.length > 0 ? formData.desiredSections.join(', ') : 'Nenhuma'}
+5. ESTRUTURA DESEJADA
+${formData.desiredSections}
 
-6. FUNCIONALIDADES
-${formData.features.length > 0 ? formData.features.join(', ') : 'Nenhuma'}
+6. FUNCIONALIDADES NECESSÁRIAS
+${formData.features}
 
 7. DOMÍNIO E HOSPEDAGEM
 ${formData.domain}
 
 8. PRAZO
-${formData.deadline || 'Não informado'}
+${formData.deadline}
 
 9. INFORMAÇÕES ADICIONAIS
-${formData.additionalInfo || 'Nenhuma'}
+${formData.additionalInfo}
       `.trim();
 
       const formElement = document.createElement('form');
@@ -279,14 +253,7 @@ ${formData.additionalInfo || 'Nenhuma'}
       subjectInput.value = 'Novo Briefing de Landing Page';
       formElement.appendChild(subjectInput);
 
-      const emailInput = document.createElement('input');
-      emailInput.type = 'hidden';
-      emailInput.name = 'email';
-      emailInput.value = 'stackflow.soft@gmail.com';
-      formElement.appendChild(emailInput);
-
-      const messageInput = document.createElement('input');
-      messageInput.type = 'hidden';
+      const messageInput = document.createElement('textarea');
       messageInput.name = 'message';
       messageInput.value = emailContent;
       formElement.appendChild(messageInput);
@@ -302,32 +269,21 @@ ${formData.additionalInfo || 'Nenhuma'}
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Form submission failed');
+      if (response.ok) {
+        setIsSubmitted(true);
+        const successMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          type: 'bot',
+          content: 'Perfeito! Seu briefing foi enviado com sucesso. Em breve entraremos em contato com você! 🎉',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, successMessage]);
       }
 
-      const successMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        type: 'bot',
-        content: '✅ Perfeito! Recebi todas as suas informações. Em breve entraremos em contato para discutir os detalhes do seu projeto. Obrigado!',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, successMessage]);
-      setIsSubmitted(true);
-
-      if (document.body.contains(formElement)) {
-        document.body.removeChild(formElement);
-      }
+      document.body.removeChild(formElement);
+      setIsLoading(false);
     } catch (error) {
-      console.error('Error submitting form:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 3).toString(),
-        type: 'bot',
-        content: '❌ Houve um erro ao enviar o formulário. Por favor, tente novamente.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      console.error('Erro ao enviar formulário:', error);
       setIsLoading(false);
     }
   };
@@ -440,8 +396,9 @@ ${formData.additionalInfo || 'Nenhuma'}
             transition={{ duration: 0.4, delay: 0.2 }}
             className="mt-8"
           >
-            {step.options ? (
-              <div className="grid grid-cols-1 gap-2">
+            {/* Mostrar opções rápidas se existirem */}
+            {step.options && step.options.length > 0 && (
+              <div className="grid grid-cols-1 gap-2 mb-4">
                 {step.options.map((option, idx) => (
                   <motion.button
                     key={option}
@@ -450,59 +407,40 @@ ${formData.additionalInfo || 'Nenhuma'}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: idx * 0.05 }}
                     whileHover={{ x: 4 }}
-                    className={`p-3 text-left rounded-xl border-2 transition-all ${
-                      step.multiple
-                        ? formData[step.key as keyof FormData]?.includes(option)
-                          ? 'border-cyan-500 bg-blue-900/50 text-cyan-300'
-                          : 'border-blue-700 bg-slate-800/50 hover:border-blue-600 text-gray-200'
-                        : 'border-blue-700 bg-slate-800/50 hover:border-blue-600 text-gray-200'
-                    }`}
+                    className="p-3 text-left rounded-xl border-2 transition-all border-blue-700 bg-slate-800/50 hover:border-blue-600 text-gray-200"
                   >
                     <span className="text-sm font-medium">{option}</span>
                   </motion.button>
                 ))}
-                {step.multiple && (
-                  <motion.button
-                    onClick={() => {
-                      const selected = formData[step.key as keyof FormData];
-                      if (Array.isArray(selected) && selected.length > 0) {
-                        handleNextStep(selected.join(', '));
-                      }
-                    }}
-                    disabled={!Array.isArray(formData[step.key as keyof FormData]) || (formData[step.key as keyof FormData] as string[]).length === 0}
-                    className="mt-4 w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white py-2 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Próximo
-                  </motion.button>
-                )}
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type={step.inputType === 'textarea' ? 'text' : step.inputType || 'text'}
-                  value={userInput}
-                  onChange={e => setUserInput(e.target.value)}
-                  onKeyPress={e => {
-                    if (e.key === 'Enter' && userInput.trim()) {
-                      handleInputSubmit(userInput);
-                    }
-                  }}
-                  placeholder="Digite sua resposta..."
-                  className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-700 focus:border-cyan-500 focus:outline-none bg-slate-800/50 text-gray-100 placeholder-gray-400 transition-colors"
-                />
-                <Button
-                  onClick={() => {
-                    if (userInput.trim()) {
-                      handleInputSubmit(userInput);
-                    }
-                  }}
-                  disabled={!userInput.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-xl px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
               </div>
             )}
+
+            {/* Campo de input de texto em TODAS as etapas */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={userInput}
+                onChange={e => setUserInput(e.target.value)}
+                onKeyPress={e => {
+                  if (e.key === 'Enter' && userInput.trim()) {
+                    handleInputSubmit(userInput);
+                  }
+                }}
+                placeholder={step.options && step.options.length > 0 ? "Ou digite sua resposta..." : "Digite sua resposta..."}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-700 focus:border-cyan-500 focus:outline-none bg-slate-800/50 text-gray-100 placeholder-gray-400 transition-colors"
+              />
+              <Button
+                onClick={() => {
+                  if (userInput.trim()) {
+                    handleInputSubmit(userInput);
+                  }
+                }}
+                disabled={!userInput.trim()}
+                className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-xl px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           </motion.div>
         )}
 
