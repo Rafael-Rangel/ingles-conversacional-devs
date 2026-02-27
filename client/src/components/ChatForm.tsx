@@ -1,0 +1,528 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+interface Message {
+  id: string;
+  type: 'bot' | 'user';
+  content: string;
+  timestamp: Date;
+}
+
+interface FormData {
+  objective: string;
+  targetAudience: string;
+  availableContent: string[];
+  referenceLinks: string;
+  desiredSections: string[];
+  features: string[];
+  domain: string;
+  deadline: string;
+  additionalInfo: string;
+}
+
+const STEPS = [
+  {
+    id: 'objective',
+    title: 'Objetivo da Landing Page',
+    question: 'Qual é o principal objetivo da sua landing page?',
+    options: [
+      'Captar leads',
+      'Receber contatos pelo WhatsApp',
+      'Gerar pedidos de orçamento',
+      'Apresentar serviços',
+      'Outro'
+    ],
+    key: 'objective'
+  },
+  {
+    id: 'audience',
+    title: 'Público-Alvo',
+    question: 'Qual é o público que você deseja atingir?',
+    options: [
+      'Empresas',
+      'Pessoas físicas',
+      'Pequenos negócios',
+      'Clínicas',
+      'Lojas',
+      'Outro'
+    ],
+    key: 'targetAudience'
+  },
+  {
+    id: 'content',
+    title: 'Conteúdo Disponível',
+    question: 'Qual conteúdo você já possui?',
+    options: [
+      'Textos',
+      'Logo',
+      'Imagens',
+      'Vídeos',
+      'Identidade visual',
+      'Nenhum ainda'
+    ],
+    key: 'availableContent',
+    multiple: true
+  },
+  {
+    id: 'references',
+    title: 'Sites de Referência',
+    question: 'Envie links de sites que você gosta como referência (ou descreva o estilo)',
+    inputType: 'textarea',
+    key: 'referenceLinks'
+  },
+  {
+    id: 'sections',
+    title: 'Estrutura Desejada',
+    question: 'Quais seções você deseja incluir?',
+    options: [
+      'Banner inicial',
+      'Serviços',
+      'Sobre a empresa',
+      'Depoimentos',
+      'Portfólio',
+      'Formulário',
+      'Botão WhatsApp'
+    ],
+    key: 'desiredSections',
+    multiple: true
+  },
+  {
+    id: 'features',
+    title: 'Funcionalidades Necessárias',
+    question: 'Quais recursos você deseja?',
+    options: [
+      'Formulário de contato',
+      'Botão WhatsApp',
+      'Integração com CRM',
+      'Pixel de anúncios',
+      'Google Analytics'
+    ],
+    key: 'features',
+    multiple: true
+  },
+  {
+    id: 'domain',
+    title: 'Domínio e Hospedagem',
+    question: 'Você já possui domínio e hospedagem?',
+    options: [
+      'Sim, tenho ambos',
+      'Tenho domínio apenas',
+      'Tenho hospedagem apenas',
+      'Não tenho nenhum',
+      'Quero que vocês cuidem disso'
+    ],
+    key: 'domain'
+  },
+  {
+    id: 'deadline',
+    title: 'Prazo',
+    question: 'Existe prazo para entrega do projeto?',
+    inputType: 'text',
+    key: 'deadline'
+  },
+  {
+    id: 'additional',
+    title: 'Informações Adicionais',
+    question: 'Há mais alguma coisa que você gostaria de nos informar?',
+    inputType: 'textarea',
+    key: 'additionalInfo'
+  }
+];
+
+export default function ChatForm() {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [formData, setFormData] = useState<FormData>({
+    objective: '',
+    targetAudience: '',
+    availableContent: [],
+    referenceLinks: '',
+    desiredSections: [],
+    features: [],
+    domain: '',
+    deadline: '',
+    additionalInfo: ''
+  });
+  const [userInput, setUserInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setTimeout(() => {
+        const greeting: Message = {
+          id: '0',
+          type: 'bot',
+          content: 'Olá! 👋 Bem-vindo ao assistente de briefing para landing pages. Vou fazer algumas perguntas para entender melhor o seu projeto. Vamos começar?',
+          timestamp: new Date()
+        };
+        setMessages([greeting]);
+      }, 500);
+    }
+  }, []);
+
+  const handleOptionClick = (option: string) => {
+    const step = STEPS[currentStep];
+    
+    if (step.multiple) {
+      const currentValue = formData[step.key as keyof FormData] as string[];
+      const newValue = currentValue.includes(option)
+        ? currentValue.filter(item => item !== option)
+        : [...currentValue, option];
+      setFormData(prev => ({
+        ...prev,
+        [step.key]: newValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [step.key]: option
+      }));
+      handleNextStep(option);
+    }
+  };
+
+  const handleInputSubmit = (value: string) => {
+    const step = STEPS[currentStep];
+    setFormData(prev => ({
+      ...prev,
+      [step.key]: value
+    }));
+    handleNextStep(value);
+  };
+
+  const handleNextStep = (userResponse: string) => {
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: 'user',
+      content: userResponse,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    if (currentStep === STEPS.length - 1) {
+      submitForm();
+      return;
+    }
+
+    setIsLoading(true);
+    setTimeout(() => {
+      const nextStep = STEPS[currentStep + 1];
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: nextStep.question,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMessage]);
+      setCurrentStep(prev => prev + 1);
+      setIsLoading(false);
+      setUserInput('');
+    }, 800);
+  };
+
+  const submitForm = async () => {
+    setIsLoading(true);
+    
+    try {
+      const emailContent = `
+BRIEFING PARA LANDING PAGE
+========================
+
+1. OBJETIVO DA LANDING PAGE
+${formData.objective}
+
+2. PÚBLICO-ALVO
+${formData.targetAudience}
+
+3. CONTEÚDO DISPONÍVEL
+${formData.availableContent.length > 0 ? formData.availableContent.join(', ') : 'Nenhum'}
+
+4. SITES DE REFERÊNCIA
+${formData.referenceLinks || 'Nenhum informado'}
+
+5. SEÇÕES DESEJADAS
+${formData.desiredSections.length > 0 ? formData.desiredSections.join(', ') : 'Nenhuma'}
+
+6. FUNCIONALIDADES
+${formData.features.length > 0 ? formData.features.join(', ') : 'Nenhuma'}
+
+7. DOMÍNIO E HOSPEDAGEM
+${formData.domain}
+
+8. PRAZO
+${formData.deadline || 'Não informado'}
+
+9. INFORMAÇÕES ADICIONAIS
+${formData.additionalInfo || 'Nenhuma'}
+      `.trim();
+
+      const formElement = document.createElement('form');
+      formElement.method = 'POST';
+      formElement.action = 'https://formsubmit.co/stackflow.soft@gmail.com';
+      formElement.style.display = 'none';
+
+      const subjectInput = document.createElement('input');
+      subjectInput.type = 'hidden';
+      subjectInput.name = '_subject';
+      subjectInput.value = 'Novo Briefing de Landing Page';
+      formElement.appendChild(subjectInput);
+
+      const emailInput = document.createElement('input');
+      emailInput.type = 'hidden';
+      emailInput.name = 'email';
+      emailInput.value = 'stackflow.soft@gmail.com';
+      formElement.appendChild(emailInput);
+
+      const messageInput = document.createElement('input');
+      messageInput.type = 'hidden';
+      messageInput.name = 'message';
+      messageInput.value = emailContent;
+      formElement.appendChild(messageInput);
+
+      document.body.appendChild(formElement);
+      
+      const formDataToSend = new FormData(formElement);
+      const response = await fetch('https://formsubmit.co/stackflow.soft@gmail.com', {
+        method: 'POST',
+        body: formDataToSend,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Form submission failed');
+      }
+
+      const successMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        type: 'bot',
+        content: '✅ Perfeito! Recebi todas as suas informações. Em breve entraremos em contato para discutir os detalhes do seu projeto. Obrigado!',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, successMessage]);
+      setIsSubmitted(true);
+
+      if (document.body.contains(formElement)) {
+        document.body.removeChild(formElement);
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 3).toString(),
+        type: 'bot',
+        content: '❌ Houve um erro ao enviar o formulário. Por favor, tente novamente.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const step = STEPS[currentStep];
+  const progress = ((currentStep + 1) / STEPS.length) * 100;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
+      <div className="bg-white/80 backdrop-blur-md border-b border-blue-100 sticky top-0 z-40">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              <h1 className="text-lg font-display font-bold text-blue-900">
+                Briefing Chat
+              </h1>
+            </div>
+            <span className="text-sm text-gray-600">
+              Etapa {currentStep + 1} de {STEPS.length}
+            </span>
+          </div>
+          <div className="w-full bg-blue-100 rounded-full h-2">
+            <motion.div
+              className="bg-gradient-to-r from-blue-600 to-cyan-500 h-full rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full px-4 py-8">
+        <AnimatePresence mode="wait">
+          {messages.map((message, index) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className={`flex mb-6 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`flex gap-3 max-w-xs lg:max-w-md ${
+                  message.type === 'user' ? 'flex-row-reverse' : ''
+                }`}
+              >
+                {message.type === 'bot' && (
+                  <motion.div
+                    className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center flex-shrink-0"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                  >
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </motion.div>
+                )}
+
+                <motion.div
+                  className={`px-4 py-3 rounded-2xl backdrop-blur-sm ${
+                    message.type === 'bot'
+                      ? 'bg-white/80 border border-blue-200 text-gray-800 rounded-bl-none'
+                      : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-br-none'
+                  }`}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <p className="text-sm leading-relaxed">{message.content}</p>
+                </motion.div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {isLoading && (
+          <motion.div
+            className="flex gap-3 mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex gap-1 items-center">
+              {[0, 1, 2].map(i => (
+                <motion.div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-blue-600"
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 1, delay: i * 0.1, repeat: Infinity }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {!isSubmitted && !isLoading && currentStep < STEPS.length && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="mt-8"
+          >
+            {step.options ? (
+              <div className="grid grid-cols-1 gap-2">
+                {step.options.map((option, idx) => (
+                  <motion.button
+                    key={option}
+                    onClick={() => handleOptionClick(option)}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: idx * 0.05 }}
+                    whileHover={{ x: 4 }}
+                    className={`p-3 text-left rounded-xl border-2 transition-all ${
+                      step.multiple
+                        ? formData[step.key as keyof FormData]?.includes(option)
+                          ? 'border-blue-600 bg-blue-50 text-blue-900'
+                          : 'border-blue-200 bg-white hover:border-blue-400 text-gray-700'
+                        : 'border-blue-200 bg-white hover:border-blue-400 text-gray-700'
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{option}</span>
+                  </motion.button>
+                ))}
+                {step.multiple && (
+                  <motion.button
+                    onClick={() => {
+                      const selected = formData[step.key as keyof FormData];
+                      if (Array.isArray(selected) && selected.length > 0) {
+                        handleNextStep(selected.join(', '));
+                      }
+                    }}
+                    disabled={!Array.isArray(formData[step.key as keyof FormData]) || (formData[step.key as keyof FormData] as string[]).length === 0}
+                    className="mt-4 w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Próximo
+                  </motion.button>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type={step.inputType === 'textarea' ? 'text' : step.inputType || 'text'}
+                  value={userInput}
+                  onChange={e => setUserInput(e.target.value)}
+                  onKeyPress={e => {
+                    if (e.key === 'Enter' && userInput.trim()) {
+                      handleInputSubmit(userInput);
+                    }
+                  }}
+                  placeholder="Digite sua resposta..."
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-200 focus:border-blue-600 focus:outline-none bg-white text-gray-800 placeholder-gray-500 transition-colors"
+                />
+                <Button
+                  onClick={() => {
+                    if (userInput.trim()) {
+                      handleInputSubmit(userInput);
+                    }
+                  }}
+                  disabled={!userInput.trim()}
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {isSubmitted && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col items-center justify-center py-12 text-center"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
+            </motion.div>
+            <h2 className="text-2xl font-display font-bold text-gray-900 mb-2">
+              Formulário Enviado com Sucesso!
+            </h2>
+            <p className="text-gray-600">
+              Obrigado por compartilhar os detalhes do seu projeto. Em breve entraremos em contato.
+            </p>
+          </motion.div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+    </div>
+  );
+}
