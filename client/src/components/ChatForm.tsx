@@ -336,21 +336,20 @@ ${formData.additionalInfo || 'Nenhuma'}
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
-      <div className="bg-white/80 backdrop-blur-md border-b border-blue-100 sticky top-0 z-40">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 flex flex-col">
+      <div className="bg-slate-900/80 backdrop-blur-md border-b border-blue-900 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-blue-600" />
-              <h1 className="text-lg font-display font-bold text-blue-900">
+              <h1 className="text-lg font-display font-bold text-cyan-400">
                 Briefing Chat
               </h1>
             </div>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-300">
               Etapa {currentStep + 1} de {STEPS.length}
             </span>
           </div>
-          <div className="w-full bg-blue-100 rounded-full h-2">
+          <div className="w-full bg-blue-900 rounded-full h-2">
             <motion.div
               className="bg-gradient-to-r from-blue-600 to-cyan-500 h-full rounded-full"
               initial={{ width: 0 }}
@@ -378,20 +377,24 @@ ${formData.additionalInfo || 'Nenhuma'}
               >
                 {message.type === 'bot' && (
                   <motion.div
-                    className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center flex-shrink-0"
+                    className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden"
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.1 }}
                   >
-                    <Sparkles className="w-5 h-5 text-white" />
+                    <img 
+                      src="https://d2xsxph8kpxj0f.cloudfront.net/310519663370803495/mjUwYk48ozGEqcyv5KrozC/ai-assistant-avatar-jDay5y6ysLpThsg6odbAmd.webp" 
+                      alt="AI Assistant" 
+                      className="w-full h-full object-cover"
+                    />
                   </motion.div>
                 )}
 
                 <motion.div
                   className={`px-4 py-3 rounded-2xl backdrop-blur-sm ${
                     message.type === 'bot'
-                      ? 'bg-white/80 border border-blue-200 text-gray-800 rounded-bl-none'
-                      : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-br-none'
+                      ? 'bg-slate-800/80 border border-blue-700 text-gray-100 rounded-bl-none'
+                      : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-br-none'
                   }`}
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -410,8 +413,12 @@ ${formData.additionalInfo || 'Nenhuma'}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden">
+              <img 
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663370803495/mjUwYk48ozGEqcyv5KrozC/ai-assistant-avatar-jDay5y6ysLpThsg6odbAmd.webp" 
+                alt="AI Assistant" 
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="flex gap-1 items-center">
               {[0, 1, 2].map(i => (
@@ -446,9 +453,9 @@ ${formData.additionalInfo || 'Nenhuma'}
                     className={`p-3 text-left rounded-xl border-2 transition-all ${
                       step.multiple
                         ? formData[step.key as keyof FormData]?.includes(option)
-                          ? 'border-blue-600 bg-blue-50 text-blue-900'
-                          : 'border-blue-200 bg-white hover:border-blue-400 text-gray-700'
-                        : 'border-blue-200 bg-white hover:border-blue-400 text-gray-700'
+                          ? 'border-cyan-500 bg-blue-900/50 text-cyan-300'
+                          : 'border-blue-700 bg-slate-800/50 hover:border-blue-600 text-gray-200'
+                        : 'border-blue-700 bg-slate-800/50 hover:border-blue-600 text-gray-200'
                     }`}
                   >
                     <span className="text-sm font-medium">{option}</span>
@@ -463,7 +470,7 @@ ${formData.additionalInfo || 'Nenhuma'}
                       }
                     }}
                     disabled={!Array.isArray(formData[step.key as keyof FormData]) || (formData[step.key as keyof FormData] as string[]).length === 0}
-                    className="mt-4 w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="mt-4 w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white py-2 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     Próximo
                   </motion.button>
@@ -481,7 +488,7 @@ ${formData.additionalInfo || 'Nenhuma'}
                     }
                   }}
                   placeholder="Digite sua resposta..."
-                  className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-200 focus:border-blue-600 focus:outline-none bg-white text-gray-800 placeholder-gray-500 transition-colors"
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-blue-700 focus:border-cyan-500 focus:outline-none bg-slate-800/50 text-gray-100 placeholder-gray-400 transition-colors"
                 />
                 <Button
                   onClick={() => {
@@ -490,7 +497,7 @@ ${formData.additionalInfo || 'Nenhuma'}
                     }
                   }}
                   disabled={!userInput.trim()}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-xl px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <Send className="w-4 h-4" />
                 </Button>
@@ -512,10 +519,10 @@ ${formData.additionalInfo || 'Nenhuma'}
             >
               <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
             </motion.div>
-            <h2 className="text-2xl font-display font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-display font-bold text-cyan-300 mb-2">
               Formulário Enviado com Sucesso!
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-300">
               Obrigado por compartilhar os detalhes do seu projeto. Em breve entraremos em contato.
             </p>
           </motion.div>
