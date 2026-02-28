@@ -10,7 +10,7 @@ interface Message {
   timestamp: Date;
 }
 
-interface FormData {
+interface BriefingData {
   name: string;
   companyName: string;
   phone: string;
@@ -147,7 +147,7 @@ const STEPS = [
 export default function ChatForm() {
   const [currentStep, setCurrentStep] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<BriefingData>({
     name: '',
     companyName: '',
     phone: '',
@@ -234,7 +234,7 @@ export default function ChatForm() {
     }, 800);
   };
 
-  const submitForm = async (data?: FormData) => {
+  const submitForm = async (data?: BriefingData) => {
     setIsLoading(true);
     const formDataToSend = data ?? formData;
 
@@ -297,10 +297,10 @@ ${formDataToSend.additionalInfo}
 
       document.body.appendChild(formElement);
       
-      const formDataToSend = new FormData(formElement);
+      const requestBody = new FormData(formElement);
       const response = await fetch('https://formsubmit.co/stackflow.soft@gmail.com', {
         method: 'POST',
-        body: formDataToSend,
+        body: requestBody,
         headers: {
           'Accept': 'application/json'
         }
