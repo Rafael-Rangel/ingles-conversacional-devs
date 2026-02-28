@@ -11,6 +11,9 @@ interface Message {
 }
 
 interface FormData {
+  name: string;
+  companyName: string;
+  phone: string;
   objective: string;
   targetAudience: string;
   availableContent: string;
@@ -23,6 +26,24 @@ interface FormData {
 }
 
 const STEPS = [
+  {
+    id: 'name',
+    title: 'Nome',
+    question: 'Qual é o seu nome completo?',
+    key: 'name'
+  },
+  {
+    id: 'company',
+    title: 'Nome da Empresa',
+    question: 'Qual é o nome da sua empresa ou negócio?',
+    key: 'companyName'
+  },
+  {
+    id: 'phone',
+    title: 'Telefone',
+    question: 'Qual é o seu número de telefone ou WhatsApp?',
+    key: 'phone'
+  },
   {
     id: 'objective',
     title: 'Objetivo da Landing Page',
@@ -51,7 +72,7 @@ const STEPS = [
   {
     id: 'content',
     title: 'Conteúdo Disponível',
-    question: 'Qual conteúdo você já possui?',
+    question: 'Que tipo de conteúdo você já possui para usar no site?',
     options: [
       'Textos',
       'Logo',
@@ -65,28 +86,28 @@ const STEPS = [
   {
     id: 'references',
     title: 'Sites de Referência',
-    question: 'Envie links de sites que você gosta como referência (ou descreva o estilo)',
+    question: 'Envie links de sites que você gosta como referência ou descreva o estilo desejado.',
     key: 'referenceLinks'
   },
   {
     id: 'sections',
     title: 'Estrutura Desejada',
-    question: 'Quais seções você deseja incluir?',
+    question: 'Quais seções você deseja incluir na landing page?',
     options: [
       'Banner inicial',
       'Serviços',
       'Sobre a empresa',
       'Depoimentos',
       'Portfólio',
-      'Formulário',
+      'Formulário de contato',
       'Botão WhatsApp'
     ],
     key: 'desiredSections'
   },
   {
     id: 'features',
-    title: 'Funcionalidades Necessárias',
-    question: 'Quais recursos você deseja?',
+    title: 'Funcionalidades',
+    question: 'Quais funcionalidades você precisa no site?',
     options: [
       'Formulário de contato',
       'Botão WhatsApp',
@@ -112,13 +133,13 @@ const STEPS = [
   {
     id: 'deadline',
     title: 'Prazo',
-    question: 'Existe prazo para entrega do projeto?',
+    question: 'Existe algum prazo para a entrega do projeto?',
     key: 'deadline'
   },
   {
     id: 'additional',
     title: 'Informações Adicionais',
-    question: 'Há mais alguma coisa que você gostaria de nos informar?',
+    question: 'Há mais alguma informação que você gostaria de compartilhar?',
     key: 'additionalInfo'
   }
 ];
@@ -127,6 +148,9 @@ export default function ChatForm() {
   const [currentStep, setCurrentStep] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [formData, setFormData] = useState<FormData>({
+    name: '',
+    companyName: '',
+    phone: '',
     objective: '',
     targetAudience: '',
     availableContent: '',
@@ -156,10 +180,16 @@ export default function ChatForm() {
         const greeting: Message = {
           id: '0',
           type: 'bot',
-          content: 'Olá! 👋 Bem-vindo ao assistente de briefing para landing pages. Vou fazer algumas perguntas para entender melhor o seu projeto. Vamos começar?',
+          content: 'Olá! 👋 Bem-vindo ao assistente de briefing da StackFlow. Vou fazer algumas perguntas para entender melhor o seu projeto e criar uma landing page ideal para você.',
           timestamp: new Date()
         };
-        setMessages([greeting]);
+        const firstQuestion: Message = {
+          id: '1',
+          type: 'bot',
+          content: STEPS[0].question,
+          timestamp: new Date()
+        };
+        setMessages([greeting, firstQuestion]);
       }, 500);
     }
   }, []);
@@ -172,10 +202,8 @@ export default function ChatForm() {
     if (!value.trim()) return;
 
     const step = STEPS[currentStep];
-    setFormData(prev => ({
-      ...prev,
-      [step.key]: value
-    }));
+    const updatedFormData = { ...formData, [step.key]: value };
+    setFormData(updatedFormData);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -186,7 +214,7 @@ export default function ChatForm() {
     setMessages(prev => [...prev, userMessage]);
 
     if (currentStep === STEPS.length - 1) {
-      submitForm();
+      submitForm(updatedFormData);
       return;
     }
 
@@ -206,40 +234,49 @@ export default function ChatForm() {
     }, 800);
   };
 
-  const submitForm = async () => {
+  const submitForm = async (data?: FormData) => {
     setIsLoading(true);
-    
+    const formDataToSend = data ?? formData;
+
     try {
       const emailContent = `
-BRIEFING PARA LANDING PAGE
-========================
+BRIEFING PARA LANDING PAGE - StackFlow
+=====================================
 
-1. OBJETIVO DA LANDING PAGE
-${formData.objective}
+DADOS DE CONTATO
+----------------
+Nome: ${formDataToSend.name}
+Empresa: ${formDataToSend.companyName}
+Telefone/WhatsApp: ${formDataToSend.phone}
 
-2. PÚBLICO-ALVO
-${formData.targetAudience}
+OBJETIVO E ESTRUTURA
+-------------------
+1. Objetivo da Landing Page
+${formDataToSend.objective}
 
-3. CONTEÚDO DISPONÍVEL
-${formData.availableContent}
+2. Público-Alvo
+${formDataToSend.targetAudience}
 
-4. SITES DE REFERÊNCIA
-${formData.referenceLinks}
+3. Conteúdo Disponível
+${formDataToSend.availableContent}
 
-5. ESTRUTURA DESEJADA
-${formData.desiredSections}
+4. Sites de Referência
+${formDataToSend.referenceLinks}
 
-6. FUNCIONALIDADES NECESSÁRIAS
-${formData.features}
+5. Estrutura Desejada
+${formDataToSend.desiredSections}
 
-7. DOMÍNIO E HOSPEDAGEM
-${formData.domain}
+6. Funcionalidades
+${formDataToSend.features}
 
-8. PRAZO
-${formData.deadline}
+7. Domínio e Hospedagem
+${formDataToSend.domain}
 
-9. INFORMAÇÕES ADICIONAIS
-${formData.additionalInfo}
+8. Prazo para Entrega
+${formDataToSend.deadline}
+
+9. Informações Adicionais
+${formDataToSend.additionalInfo}
       `.trim();
 
       const formElement = document.createElement('form');
