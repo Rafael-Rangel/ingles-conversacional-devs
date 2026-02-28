@@ -338,9 +338,6 @@ ${formDataToSend.additionalInfo}
                 StackFlow Briefing
               </h1>
             </div>
-            <span className="text-sm text-gray-300">
-              Etapa {currentStep + 1} de {STEPS.length}
-            </span>
           </div>
           <div className="w-full bg-blue-900 rounded-full h-2">
             <motion.div
