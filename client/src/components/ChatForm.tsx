@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, CheckCircle2 } from 'lucide-react';
+import { Send, CheckCircle2, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -140,6 +140,7 @@ export default function ChatForm() {
   const [userInput, setUserInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -149,6 +150,19 @@ export default function ChatForm() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -300,6 +314,19 @@ ${formData.additionalInfo}
               <h1 className="text-lg font-display font-bold text-cyan-400">
                 Briefing Chat
               </h1>
+              <div className="flex items-center gap-1">
+                {isOnline ? (
+                  <>
+                    <Wifi className="w-4 h-4 text-green-500" />
+                    <span className="text-xs text-green-500">Online</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-4 h-4 text-red-500" />
+                    <span className="text-xs text-red-500">Offline</span>
+                  </>
+                )}
+              </div>
             </div>
             <span className="text-sm text-gray-300">
               Etapa {currentStep + 1} de {STEPS.length}
