@@ -54,6 +54,15 @@ Abra o URL mostrado (ex.: http://localhost:5173). Faça login e use a trilha: es
 - `supabase/seed.sql` — trilha CEFR A1–B1 com conteúdo para devs.
 - `supabase/functions/tutor/` — Edge Function que chama a Groq com system prompt por aula.
 
+## Deploy na Netlify
+
+1. Conecte o repositório [ingles-conversacional-devs](https://github.com/Rafael-Rangel/ingles-conversacional-devs) no [Netlify](https://app.netlify.com).
+2. Build command e publish directory já vêm do `netlify.toml` (`npm run build` e `dist`).
+3. Em **Site settings → Environment variables** adicione:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Faça o deploy. O app usa Supabase na nuvem; a Edge Function `tutor` deve estar publicada no seu projeto Supabase.
+
 ## Stack
 
 - React 18, Vite, TypeScript
