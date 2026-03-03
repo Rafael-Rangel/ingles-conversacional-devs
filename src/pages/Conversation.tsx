@@ -8,6 +8,8 @@ const SpeechRecognitionAPI =
   typeof window !== 'undefined' &&
   (window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)
 
+type ListeningMode = 'input' | 'transcribe' | 'voice' | null
+
 export function Conversation() {
   const { lessonId } = useParams<{ lessonId: string }>()
   const [lesson, setLesson] = useState<Lesson | null>(null)
@@ -16,6 +18,8 @@ export function Conversation() {
   const [loading, setLoading] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isListening, setIsListening] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [autoPlayVoice, setAutoPlayVoice] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<InstanceType<NonNullable<typeof SpeechRecognitionAPI>> | null>(null)
@@ -23,10 +27,15 @@ export function Conversation() {
   const userStoppedRef = useRef(false)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
   const messagesRef = useRef<Message[]>(messages)
+  const listeningModeRef = useRef<ListeningMode>(null)
+  const isVoiceModeRef = useRef(false)
   messagesRef.current = messages
-  const onTeacherMessageRef = useRef<(content: string) => void>(() => {})
-  onTeacherMessageRef.current = (content: string) => {
-    if (autoPlayVoice) speak(content)
+  isVoiceModeRef.current = isVoiceMode
+
+  const onTeacherMessageRef = useRef<(content: string, options?: { voiceMode?: boolean; playTTS?: boolean }) => void>(() => {})
+  onTeacherMessageRef.current = (content: string, options) => {
+    const playTTS = options?.playTTS ?? (options?.voiceMode ? true : autoPlayVoice)
+    if (playTTS) speak(content, options?.voiceMode ? () => maybeRestartVoiceListening() : undefined)
   }
 
   useEffect(() => {
@@ -43,15 +52,30 @@ export function Conversation() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const speak = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
+  const speak = useCallback((text: string, onEnd?: () => void) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      onEnd?.()
+      return
+    }
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.lang = 'en-US'
     u.rate = 0.9
     utteranceRef.current = u
+    if (onEnd) {
+      u.onend = () => onEnd()
+    }
     window.speechSynthesis.speak(u)
   }, [])
+
+  function maybeRestartVoiceListening() {
+    if (!isVoiceModeRef.current || !SpeechRecognitionAPI || !recognitionRef.current) return
+    transcriptRef.current = ''
+    userStoppedRef.current = false
+    listeningModeRef.current = 'voice'
+    recognitionRef.current.start()
+    setIsListening(true)
+  }
 
   useEffect(() => {
     if (!SpeechRecognitionAPI) return
@@ -70,13 +94,24 @@ export function Conversation() {
       setIsListening(false)
       const text = transcriptRef.current.trim()
       transcriptRef.current = ''
-      if (userStoppedRef.current && text) setInput((prev) => (prev ? `${prev} ${text}` : text))
+      const mode = listeningModeRef.current
+      listeningModeRef.current = null
+
+      if (!userStoppedRef.current) {
+        userStoppedRef.current = false
+        return
+      }
       userStoppedRef.current = false
+
+      if (mode === 'input' && text) setInput((prev) => (prev ? `${prev} ${text}` : text))
+      if (mode === 'transcribe' && text) sendMessageWithOptions(text, { from_transcription: true })
+      if (mode === 'voice' && text) sendMessageWithOptions(text, { voice_mode: true })
     }
     rec.onerror = () => {
       setIsListening(false)
       transcriptRef.current = ''
       userStoppedRef.current = false
+      listeningModeRef.current = null
     }
     recognitionRef.current = rec
     return () => {
@@ -89,17 +124,40 @@ export function Conversation() {
     }
   }, [])
 
-  function toggleVoiceInput() {
+  function startListening(mode: ListeningMode) {
     if (!SpeechRecognitionAPI || !conversationId) return
-    if (isListening) {
-      userStoppedRef.current = true
-      recognitionRef.current?.stop()
-      return
-    }
     transcriptRef.current = ''
     userStoppedRef.current = false
-    setIsListening(true)
+    listeningModeRef.current = mode
     recognitionRef.current?.start()
+    setIsListening(true)
+    if (mode === 'transcribe') setIsTranscribing(true)
+  }
+
+  function stopListening() {
+    userStoppedRef.current = true
+    recognitionRef.current?.stop()
+    if (listeningModeRef.current === 'transcribe') setIsTranscribing(false)
+  }
+
+  function toggleTranscribe() {
+    if (!conversationId) return
+    if (isTranscribing || isListening) {
+      stopListening()
+      return
+    }
+    startListening('transcribe')
+  }
+
+  function toggleVoiceMode() {
+    if (!conversationId) return
+    if (isVoiceMode) {
+      setIsVoiceMode(false)
+      if (isListening) stopListening()
+      return
+    }
+    setIsVoiceMode(true)
+    startListening('voice')
   }
 
   async function startConversation() {
@@ -123,10 +181,14 @@ export function Conversation() {
       return
     }
     setConversationId(conv.id)
-    if (lesson) await fetchTeacherReply(conv.id, [])
+    if (lesson) await fetchTeacherReply(conv.id, [], {})
   }
 
-  async function fetchTeacherReply(convId: string, currentMessages: Message[]) {
+  async function fetchTeacherReply(
+    convId: string,
+    currentMessages: Message[],
+    options: { voice_mode?: boolean; from_transcription?: boolean } = {}
+  ) {
     if (!lesson) return
     setLoading(true)
     try {
@@ -139,6 +201,8 @@ export function Conversation() {
           vocabulary_tags: lesson.vocabulary_tags ?? null,
         },
         messages: currentMessages.map((m) => ({ role: m.role, content: m.content })),
+        voice_mode: options.voice_mode ?? false,
+        from_transcription: options.from_transcription ?? false,
       }
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -161,7 +225,13 @@ export function Conversation() {
         .single()
       if (inserted) {
         setMessages((prev) => [...prev, inserted as Message])
-        onTeacherMessageRef.current(teacherContent)
+        const voiceMode = !!options.voice_mode
+        const playTTS = voiceMode || autoPlayVoice
+        const fromTranscription = !!options.from_transcription
+        onTeacherMessageRef.current(teacherContent, {
+          voiceMode,
+          playTTS: fromTranscription ? false : playTTS,
+        })
       }
       const newCount = currentMessages.length + 1
       await supabase
@@ -188,23 +258,41 @@ export function Conversation() {
     }
   }
 
-  async function sendMessage() {
-    const text = input.trim()
-    if (!text || !conversationId || !lessonId) return
+  async function sendMessageWithOptions(
+    text: string,
+    options: { voice_mode?: boolean; from_transcription?: boolean } = {}
+  ) {
+    if (!text.trim() || !conversationId || !lessonId) return
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) return
     const { data: msg } = await supabase
       .from('messages')
-      .insert({ conversation_id: conversationId, role: 'student', content: text })
+      .insert({ conversation_id: conversationId, role: 'student', content: text.trim() })
       .select('id, conversation_id, role, content, correction_data, created_at')
       .single()
     if (!msg) return
     setMessages((prev) => [...prev, msg as Message])
     setInput('')
     const newMessages = [...messages, msg as Message]
-    await fetchTeacherReply(conversationId, newMessages)
+    await fetchTeacherReply(conversationId, newMessages, options)
+  }
+
+  async function sendMessage() {
+    const text = input.trim()
+    if (!text) return
+    await sendMessageWithOptions(text, {})
+  }
+
+  function toggleVoiceInput() {
+    if (!SpeechRecognitionAPI || !conversationId) return
+    if (isListening && listeningModeRef.current === 'input') {
+      stopListening()
+      return
+    }
+    if (isListening) return
+    startListening('input')
   }
 
   const showStart = conversationId === null && messages.length === 0
@@ -379,21 +467,68 @@ export function Conversation() {
               onChange={(e) => setAutoPlayVoice(e.target.checked)}
               style={{ accentColor: 'var(--green)', width: 18, height: 18, cursor: 'pointer' }}
             />
-            Ouvir resposta em áudio
+            Ouvir resposta em áudio (exceto em Transcrever)
           </label>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {SpeechRecognitionAPI && (
+
+          {SpeechRecognitionAPI && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={toggleTranscribe}
+                title={isTranscribing ? 'Parar e enviar transcrição' : 'Transcrever: gravar fala e enviar como texto'}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  border: '2px solid var(--border)',
+                  background: isTranscribing ? 'var(--error)' : 'var(--surface)',
+                  color: isTranscribing ? 'white' : 'var(--text-strong)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {isTranscribing ? '⏹ Parar e enviar' : '🎙️ Transcrever'}
+              </button>
+              <button
+                type="button"
+                onClick={isVoiceMode && isListening ? stopListening : toggleVoiceMode}
+                title={
+                  isVoiceMode && isListening
+                    ? 'Parar e enviar (resposta em áudio, depois nova escuta)'
+                    : isVoiceMode
+                      ? 'Encerrar conversa por voz'
+                      : 'Conversar: modo voz contínuo (fala ↔ resposta em áudio)'
+                }
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  border: '2px solid var(--border)',
+                  background: isVoiceMode ? 'var(--blue)' : 'var(--surface)',
+                  color: isVoiceMode ? 'white' : 'var(--text-strong)',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {isVoiceMode && isListening ? '⏹ Parar e enviar' : isVoiceMode ? '🔊 Encerrar voz' : '🎧 Conversar'}
+              </button>
               <button
                 type="button"
                 onClick={toggleVoiceInput}
-                title={isListening ? 'Parar gravação' : 'Falar (clique e fale; ao parar envia)'}
+                title={isListening && listeningModeRef.current === 'input' ? 'Parar' : 'Falar e colocar no campo (depois Enviar)'}
                 style={{
                   width: 48,
                   height: 48,
                   borderRadius: 14,
                   border: '2px solid var(--border)',
-                  background: isListening ? 'var(--error)' : 'var(--surface)',
-                  color: isListening ? 'white' : 'var(--text-strong)',
+                  background: isListening && listeningModeRef.current === 'input' ? 'var(--green)' : 'var(--surface)',
+                  color: isListening && listeningModeRef.current === 'input' ? 'white' : 'var(--text-strong)',
                   cursor: 'pointer',
                   fontSize: '1.25rem',
                   flexShrink: 0,
@@ -402,15 +537,18 @@ export function Conversation() {
                   justifyContent: 'center',
                 }}
               >
-                {isListening ? '⏹' : '🎤'}
+                {isListening && listeningModeRef.current === 'input' ? '⏹' : '🎤'}
               </button>
-            )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Digite ou use o microfone..."
+              placeholder="Digite ou use Transcrever / Conversar..."
               className="input"
               style={{ flex: 1, margin: 0 }}
             />

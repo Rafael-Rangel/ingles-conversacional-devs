@@ -19,9 +19,24 @@ interface RequestBody {
   lesson: LessonPayload
   messages: { role: string; content: string }[]
   studentMessage?: string | null
+  voice_mode?: boolean
+  from_transcription?: boolean
 }
 
-function buildSystemPrompt(lesson: LessonPayload): string {
+const VOICE_MODE_SYSTEM_APPENDIX = `You are now in VOICE conversation mode.
+- Respond in a natural, fluid, conversational way.
+- Use short or medium phrases. Avoid long answers.
+- No lists, no numbered items, no markdown, no emojis.
+- Sound human and dynamic. Use natural transitions like "Boa pergunta! Funciona assim…" or "Deixa eu te explicar de um jeito simples."
+- Do not use robotic or formal language. Keep it like real-time spoken conversation.`
+
+const TRANSCRIPTION_SYSTEM_APPENDIX = `This message came from speech-to-text (transcription).
+- Do NOT mention that it was a transcription. Respond as if the student had typed.
+- If the message is unclear or confusing, reply only: "Não entendi muito bem, pode repetir?"
+- If the message seems incomplete (cut off or too short to understand), reply only: "Sua mensagem pareceu incompleta, você pode falar novamente?"
+- Otherwise respond normally.`
+
+function buildSystemPrompt(lesson: LessonPayload, options: { voice_mode?: boolean; from_transcription?: boolean } = {}): string {
   const goals = Array.isArray(lesson.learning_goals)
     ? lesson.learning_goals.map((g) => `- ${g}`).join("\n")
     : ""
@@ -30,7 +45,7 @@ function buildSystemPrompt(lesson: LessonPayload): string {
     ? `Vocabulary: ${lesson.vocabulary_tags.join(", ")}.`
     : ""
 
-  return `You are a friendly English teacher for developers. This is a conversational lesson.
+  let base = `You are a friendly English teacher for developers. This is a conversational lesson.
 
 Lesson title: ${lesson.title}
 Context: ${lesson.context}
@@ -45,6 +60,15 @@ Rules:
 - Be concise (1-3 short paragraphs per reply).
 - If the student makes a mistake, correct them kindly: (1) acknowledge their attempt, (2) give the correct form, (3) brief explanation, (4) continue the conversation.
 - Keep the dialogue natural and focused on the lesson context. Do not repeat the full lesson instructions; just guide the conversation.`
+
+  if (options.voice_mode) {
+    base += "\n\n" + VOICE_MODE_SYSTEM_APPENDIX
+  }
+  if (options.from_transcription) {
+    base += "\n\n" + TRANSCRIPTION_SYSTEM_APPENDIX
+  }
+
+  return base
 }
 
 Deno.serve(async (req: Request) => {
@@ -74,12 +98,12 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 200, headers: jsonHeaders })
     }
 
-    const { lesson, messages } = body
+    const { lesson, messages, voice_mode, from_transcription } = body
     if (!lesson?.title || !lesson?.context) {
       return new Response(JSON.stringify({ error: "lesson.title and lesson.context required" }), { status: 200, headers: jsonHeaders })
     }
 
-    const systemPrompt = buildSystemPrompt(lesson)
+    const systemPrompt = buildSystemPrompt(lesson, { voice_mode: !!voice_mode, from_transcription: !!from_transcription })
     const chatMessages: ChatMessage[] = [{ role: "system", content: systemPrompt }]
 
     for (const m of messages ?? []) {
@@ -94,6 +118,7 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    const isVoiceMode = !!voice_mode
     const res = await fetch(GROQ_URL, {
       method: "POST",
       headers: {
@@ -103,7 +128,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
         messages: chatMessages,
-        max_tokens: 512,
+        max_tokens: isVoiceMode ? 150 : 512,
         temperature: 0.7,
       }),
     })
