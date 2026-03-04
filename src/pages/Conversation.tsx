@@ -17,7 +17,25 @@ import {
 
 const SpeechRecognitionAPI =
   typeof window !== 'undefined' &&
-  (window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)
+  ((window as Window & { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).SpeechRecognition ||
+    (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).webkitSpeechRecognition)
+
+interface SpeechRecognitionInstance {
+  start(): void
+  stop(): void
+  abort(): void
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((e: SpeechRecognitionResultEvent) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+}
+
+interface SpeechRecognitionResultEvent extends Event {
+  resultIndex: number
+  results: SpeechRecognitionResultList
+}
 
 type ListeningMode = 'input' | 'transcribe' | 'voice' | null
 
@@ -33,7 +51,7 @@ export function Conversation() {
   const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [autoPlayVoice, setAutoPlayVoice] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<InstanceType<NonNullable<typeof SpeechRecognitionAPI>> | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const transcriptRef = useRef<string>('')
   const userStoppedRef = useRef(false)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
@@ -95,7 +113,7 @@ export function Conversation() {
     rec.continuous = true
     rec.interimResults = true
     rec.lang = 'pt-BR'
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e: SpeechRecognitionResultEvent) => {
       let final = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) final += e.results[i][0].transcript
