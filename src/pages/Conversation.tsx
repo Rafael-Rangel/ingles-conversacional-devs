@@ -99,19 +99,33 @@ export function Conversation() {
   function unlockTTS() {
     if (ttsUnlockedRef.current || typeof window === 'undefined' || !window.speechSynthesis) return
     ttsUnlockedRef.current = true
-    window.speechSynthesis.getVoices()
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices()
+    const syn = window.speechSynthesis
+    syn.getVoices()
+    if (syn.onvoiceschanged !== undefined) {
+      syn.onvoiceschanged = () => syn.getVoices()
     }
   }
 
-  const speak = useCallback((text: string, onEnd?: () => void) => {
+  /** Chama no primeiro gesto do usuário (ex.: clicar em Conversar) para liberar TTS para uso depois (ex.: resposta da IA). */
+  function warmUpTTS() {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return
+    unlockTTS()
+    const syn = window.speechSynthesis
+    const w = new SpeechSynthesisUtterance(' ')
+    w.volume = 0
+    syn.speak(w)
+    setTimeout(() => syn.cancel(), 50)
+  }
+
+  /** Reproduz texto em áudio (Web Speech API). fromUserGesture=true quando for clique em "Ouvir" – evita bloqueio do navegador. */
+  const speak = useCallback((text: string, onEnd?: () => void, fromUserGesture?: boolean) => {
     if (typeof window === 'undefined' || !window.speechSynthesis || !text?.trim()) {
       onEnd?.()
       return
     }
     unlockTTS()
-    window.speechSynthesis.cancel()
+    const syn = window.speechSynthesis
+    syn.cancel()
     if (isVoiceModeRef.current) {
       isSpeakingRef.current = true
       setVoiceOverlayState('speaking')
@@ -119,7 +133,7 @@ export function Conversation() {
     const u = new SpeechSynthesisUtterance(text.trim())
     u.lang = 'en-US'
     u.rate = 0.9
-    const syn = window.speechSynthesis
+    u.volume = 1
     const voices = syn.getVoices()
     const enVoice = voices.find((v) => v.lang.startsWith('en')) ?? voices[0]
     if (enVoice) u.voice = enVoice
@@ -137,9 +151,12 @@ export function Conversation() {
       finish()
     }
     syn.resume?.()
-    // Não iniciar microfone durante TTS – deixa o áudio tocar; escuta só no onEnd
-    setTimeout(() => syn.speak(u), 80)
-    // Fallback: se onend não disparar (ex.: TTS bloqueado), voltar a escutar após 45s
+    const doSpeak = () => syn.speak(u)
+    if (fromUserGesture) {
+      doSpeak()
+    } else {
+      setTimeout(doSpeak, 100)
+    }
     if (onEnd) setTimeout(finish, 45000)
   }, [])
 
@@ -359,9 +376,9 @@ export function Conversation() {
       }
       return
     }
+    warmUpTTS()
     setIsVoiceMode(true)
     setVoiceOverlayState('listening')
-    // Pequeno delay para o overlay montar e o microfone estar pronto
     setTimeout(() => startListening('voice'), 150)
   }
 
@@ -678,7 +695,7 @@ export function Conversation() {
             </p>
             <button
               type="button"
-              onClick={() => { unlockTTS(); startConversation() }}
+              onClick={() => { warmUpTTS(); startConversation() }}
               disabled={loading || !lesson}
               className="btn-primary"
             >
@@ -709,7 +726,7 @@ export function Conversation() {
             {m.role === 'teacher' && (
               <button
                 type="button"
-                onClick={() => { unlockTTS(); speak(m.content) }}
+                onClick={() => { unlockTTS(); speak(m.content, undefined, true) }}
                 style={{
                   alignSelf: 'flex-start',
                   display: 'inline-flex',
