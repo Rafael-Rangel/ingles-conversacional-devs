@@ -276,6 +276,119 @@ a {
 .msg-bubble-student { animation: slideInRight var(--dur-normal) var(--ease-out-expo) both; }
 .msg-bubble-teacher { animation: slideInLeft var(--dur-normal) var(--ease-out-expo) both; }
 
+/* Voice mode overlay */
+.voice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.3s var(--ease-out-expo) both;
+}
+.voice-overlay__logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: var(--green-soft);
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform var(--dur-fast), box-shadow var(--dur-fast);
+}
+.voice-overlay__logo:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px var(--green-soft);
+}
+.voice-overlay__logo:active {
+  transform: scale(0.98);
+}
+@keyframes voiceWave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+@keyframes voicePulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.15); opacity: 0.1; }
+}
+@keyframes voiceSpeak {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.voice-waves {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  margin-top: 24px;
+}
+.voice-waves span {
+  width: 4px;
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+  transform-origin: center;
+  animation: voiceWave 0.8s ease-in-out infinite;
+}
+.voice-waves span:nth-child(1) { animation-delay: 0s; }
+.voice-waves span:nth-child(2) { animation-delay: 0.1s; }
+.voice-waves span:nth-child(3) { animation-delay: 0.2s; }
+.voice-waves span:nth-child(4) { animation-delay: 0.3s; }
+.voice-waves span:nth-child(5) { animation-delay: 0.4s; }
+.voice-waves span:nth-child(6) { animation-delay: 0.2s; }
+.voice-waves span:nth-child(7) { animation-delay: 0.1s; }
+.voice-pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 36px;
+  border: 2px solid var(--green);
+  animation: voicePulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.voice-overlay.voice-overlay--speaking .voice-overlay__logo {
+  animation: voiceSpeak 1.2s ease-in-out infinite;
+}
+.voice-controls {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+.voice-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-weight: 700;
+  transition: all var(--dur-normal);
+}
+.voice-controls button:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-soft);
+}
+.voice-controls button.voice-controls__exit {
+  width: auto;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in, .animate-fade-in-up, .animate-scale-in,
   .animate-slide-in-right, .animate-slide-in-left { animation: none; opacity: 1; }
@@ -286,4 +399,7 @@ a {
   .btn-secondary:hover { transform: none; }
   .lesson-card:hover { transform: none !important; }
   .card:hover { transform: none; }
+  .voice-waves span { animation: none; transform: scaleY(0.6); }
+  .voice-pulse { animation: none; opacity: 0.2; }
+  .voice-overlay.voice-overlay--speaking .voice-overlay__logo { animation: none; }
 }

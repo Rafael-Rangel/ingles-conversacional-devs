@@ -10,9 +10,12 @@ import {
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   Headphones,
   StopCircle,
   ChevronRight,
+  RotateCcw,
+  X,
 } from 'lucide-react'
 
 const SpeechRecognitionAPI =
@@ -49,8 +52,11 @@ export function Conversation() {
   const [isListening, setIsListening] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [isVoiceMode, setIsVoiceMode] = useState(false)
+  const [voiceOverlayState, setVoiceOverlayState] = useState<'listening' | 'thinking' | 'speaking'>('listening')
   const [autoPlayVoice, setAutoPlayVoice] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isSpeakingRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const transcriptRef = useRef<string>('')
   const userStoppedRef = useRef(false)
@@ -88,23 +94,55 @@ export function Conversation() {
       return
     }
     window.speechSynthesis.cancel()
+    if (isVoiceModeRef.current) {
+      isSpeakingRef.current = true
+      setVoiceOverlayState('speaking')
+    }
     const u = new SpeechSynthesisUtterance(text)
     u.lang = 'en-US'
     u.rate = 0.9
     utteranceRef.current = u
     if (onEnd) {
-      u.onend = () => onEnd()
+      u.onend = () => {
+        isSpeakingRef.current = false
+        onEnd()
+      }
     }
     window.speechSynthesis.speak(u)
+    // Inicia escuta durante TTS (modo voz) para detectar interrupção
+    if (isVoiceModeRef.current && SpeechRecognitionAPI && recognitionRef.current) {
+      try {
+        transcriptRef.current = ''
+        userStoppedRef.current = false
+        listeningModeRef.current = 'voice'
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch {
+        /* já escutando */
+      }
+    }
   }, [])
+
+  function stopTTSAndListen() {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      isSpeakingRef.current = false
+    }
+    maybeRestartVoiceListening()
+  }
 
   function maybeRestartVoiceListening() {
     if (!isVoiceModeRef.current || !SpeechRecognitionAPI || !recognitionRef.current) return
     transcriptRef.current = ''
     userStoppedRef.current = false
     listeningModeRef.current = 'voice'
-    recognitionRef.current.start()
-    setIsListening(true)
+    setVoiceOverlayState('listening')
+    try {
+      recognitionRef.current.start()
+      setIsListening(true)
+    } catch {
+      /* ignore */
+    }
   }
 
   useEffect(() => {
@@ -114,28 +152,52 @@ export function Conversation() {
     rec.interimResults = true
     rec.lang = 'pt-BR'
     rec.onresult = (e: SpeechRecognitionResultEvent) => {
-      // Chrome envia resultados progressivos (Olá → Olá tudo → Olá tudo bem) – pegar só o último
+      const mode = listeningModeRef.current
+
+      // Interrupção: usuário falou durante TTS
+      if (mode === 'voice' && isSpeakingRef.current) {
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+          isSpeakingRef.current = false
+        }
+        setVoiceOverlayState('listening')
+      }
+
+      // Chrome envia resultados progressivos – pegar só o último final
       let lastFinal = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) lastFinal = e.results[i][0].transcript.trim()
       }
-      if (!lastFinal) return
-      const prev = transcriptRef.current.trim()
-      // Se o novo contém o anterior (refinamento do mesmo trecho), substitui
-      if (prev && lastFinal.toLowerCase().startsWith(prev.toLowerCase())) {
-        transcriptRef.current = lastFinal
-      } else {
-        transcriptRef.current = (prev ? prev + ' ' + lastFinal : lastFinal).trim()
+      if (lastFinal) {
+        const prev = transcriptRef.current.trim()
+        if (prev && lastFinal.toLowerCase().startsWith(prev.toLowerCase())) {
+          transcriptRef.current = lastFinal
+        } else {
+          transcriptRef.current = (prev ? prev + ' ' + lastFinal : lastFinal).trim()
+        }
+      }
+
+      // Timer 1,2s de silêncio (modo voz): qualquer fala reseta; após 1,2s sem fala, envia
+      if (mode === 'voice' && (transcriptRef.current.trim() || lastFinal)) {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          silenceTimerRef.current = null
+          userStoppedRef.current = true
+          recognitionRef.current?.stop()
+        }, 1200)
       }
     }
     rec.onend = () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
       setIsListening(false)
       const mode = listeningModeRef.current
       const text = transcriptRef.current.trim()
 
       if (!userStoppedRef.current) {
         userStoppedRef.current = false
-        // Parou sozinho (ex.: timeout "no-speech" do Chrome) – reinicia para continuar ouvindo
         const canRestart = (mode === 'transcribe' || mode === 'voice' || mode === 'input') && recognitionRef.current
         if (canRestart) {
           setTimeout(() => {
@@ -164,7 +226,24 @@ export function Conversation() {
         setInput(text)
         setTimeout(() => sendMessageWithOptionsRef.current(text, { from_transcription: true }), 400)
       }
-      if (mode === 'voice' && text) sendMessageWithOptionsRef.current(text, { voice_mode: true })
+      if (mode === 'voice') {
+        if (text) {
+          sendMessageWithOptionsRef.current(text, { voice_mode: true })
+        } else if (isVoiceModeRef.current && recognitionRef.current) {
+          // Silêncio sem texto – reinicia escuta
+          transcriptRef.current = ''
+          userStoppedRef.current = false
+          listeningModeRef.current = 'voice'
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start()
+              setIsListening(true)
+            } catch {
+              /* ignore */
+            }
+          }, 120)
+        }
+      }
     }
     rec.onerror = () => {
       setIsListening(false)
@@ -219,10 +298,19 @@ export function Conversation() {
     if (!conversationId) return
     if (isVoiceMode) {
       setIsVoiceMode(false)
+      setVoiceOverlayState('listening')
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
       if (isListening) stopListening()
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+      }
       return
     }
     setIsVoiceMode(true)
+    setVoiceOverlayState('listening')
     startListening('voice')
   }
 
@@ -256,6 +344,7 @@ export function Conversation() {
     options: { voice_mode?: boolean; from_transcription?: boolean } = {}
   ) {
     if (!lesson) return
+    if (options.voice_mode) setVoiceOverlayState('thinking')
     setLoading(true)
     try {
       const body = {
@@ -378,7 +467,96 @@ export function Conversation() {
   const btnIcon = { size: 18 as const, strokeWidth: 2 }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 120px)' }}>
+    <>
+      {isVoiceMode && (
+        <div
+          className={`voice-overlay voice-overlay--${voiceOverlayState}`}
+          role="dialog"
+          aria-label="Modo conversa por voz"
+        >
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {voiceOverlayState === 'thinking' && <div className="voice-pulse" aria-hidden />}
+            <button
+              type="button"
+              className="voice-overlay__logo"
+              onClick={() => {
+                if (voiceOverlayState === 'speaking') stopTTSAndListen()
+              }}
+              title={voiceOverlayState === 'speaking' ? 'Interromper e ouvir' : undefined}
+              style={{ cursor: voiceOverlayState === 'speaking' ? 'pointer' : 'default' }}
+              aria-label={voiceOverlayState === 'speaking' ? 'Interromper resposta' : 'Logo'}
+            >
+              <MessageCircle size={48} strokeWidth={1.5} />
+            </button>
+            {voiceOverlayState === 'listening' && (
+              <div className="voice-waves" aria-hidden>
+                {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  <span key={i} />
+                ))}
+              </div>
+            )}
+            {voiceOverlayState === 'thinking' && (
+              <p style={{ margin: '24px 0 0', fontSize: 14, color: 'var(--text-muted)', fontWeight: 600 }}>
+                Pensando…
+              </p>
+            )}
+            {voiceOverlayState === 'speaking' && (
+              <p style={{ margin: '24px 0 0', fontSize: 14, color: 'var(--text-muted)', fontWeight: 600 }}>
+                Ouvindo resposta
+              </p>
+            )}
+          </div>
+          <div className="voice-controls">
+            <button
+              type="button"
+              className="voice-controls__exit"
+              onClick={toggleVoiceMode}
+              title="Encerrar conversa"
+            >
+              <X size={20} style={{ marginRight: 6 }} />
+              Encerrar conversa
+            </button>
+            {voiceOverlayState === 'speaking' && (
+              <button
+                type="button"
+                onClick={stopTTSAndListen}
+                title="Parar áudio e ouvir"
+              >
+                <VolumeX size={22} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
+                if (silenceTimerRef.current) {
+                  clearTimeout(silenceTimerRef.current)
+                  silenceTimerRef.current = null
+                }
+                userStoppedRef.current = true
+                recognitionRef.current?.stop()
+                transcriptRef.current = ''
+                userStoppedRef.current = false
+                listeningModeRef.current = 'voice'
+                setVoiceOverlayState('listening')
+                setTimeout(() => {
+                  try {
+                    recognitionRef.current?.start()
+                    setIsListening(true)
+                  } catch {
+                    /* ignore */
+                  }
+                }, 150)
+              }}
+              title="Reiniciar escuta"
+            >
+              <RotateCcw size={22} />
+            </button>
+          </div>
+        </div>
+      )}
+
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 120px)', opacity: isVoiceMode ? 0.3 : 1, pointerEvents: isVoiceMode ? 'none' : 'auto', transition: 'opacity 0.3s ease' }}>
       <div style={{ marginBottom: 16, animation: 'fadeInDown 0.3s var(--ease-out-expo) both' }}>
         <Link to={`/lesson/${lessonId}`} className="link-back">
           <ArrowLeft size={16} />
@@ -674,5 +852,6 @@ export function Conversation() {
         </div>
       )}
     </div>
+    </>
   )
 }
