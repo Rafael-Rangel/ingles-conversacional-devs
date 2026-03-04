@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase": "supabase",
+    "deploy:tts": "supabase functions deploy tts",
+    "deploy:tutor": "supabase functions deploy tutor"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

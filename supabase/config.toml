@@ -3,3 +3,6 @@
 # A autenticação de conversas/mensagens continua via RLS no banco
 [functions.tutor]
 verify_jwt = false
+
+[functions.tts]
+verify_jwt = false

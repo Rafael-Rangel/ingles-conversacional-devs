@@ -68,6 +68,7 @@ export function Conversation() {
   const transcriptRef = useRef<string>('')
   const userStoppedRef = useRef(false)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
   const messagesRef = useRef<Message[]>(messages)
   const listeningModeRef = useRef<ListeningMode>(null)
   const isVoiceModeRef = useRef(false)
@@ -106,38 +107,55 @@ export function Conversation() {
     }
   }
 
-  /** Chama no primeiro gesto do usuário (ex.: clicar em Conversar) para liberar TTS para uso depois (ex.: resposta da IA). */
+  /** Chama no primeiro gesto do usuário (ex.: clicar em Conversar) para liberar TTS para uso depois. */
   function warmUpTTS() {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
     unlockTTS()
-    const syn = window.speechSynthesis
-    const w = new SpeechSynthesisUtterance(' ')
-    w.volume = 0
-    syn.speak(w)
-    setTimeout(() => syn.cancel(), 50)
   }
 
-  /** Reproduz texto em áudio (Web Speech API). fromUserGesture=true quando for clique em "Ouvir" – evita bloqueio do navegador. */
-  const speak = useCallback((text: string, onEnd?: () => void, fromUserGesture?: boolean) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !text?.trim()) {
+  /** Reproduz áudio via Edge Function TTS (VoiceRSS ou Google). Retorna Promise que resolve quando terminar ou rejeita em erro. */
+  function playTTSViaAPI(text: string): Promise<void> {
+    const url = import.meta.env.VITE_SUPABASE_URL
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+    if (!url || !key || !text?.trim()) return Promise.reject(new Error('Missing config or text'))
+    return fetch(`${url}/functions/v1/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ text: text.trim().slice(0, 1000) }),
+    })
+      .then((res) => {
+        if (!res.ok) return res.json().then((j) => Promise.reject(new Error(j?.error || res.statusText)))
+        return res.blob()
+      })
+      .then((blob) => {
+        const objectUrl = URL.createObjectURL(blob)
+        const audio = new Audio(objectUrl)
+        ttsAudioRef.current = audio
+        return new Promise<void>((resolve, reject) => {
+          audio.onended = () => {
+            URL.revokeObjectURL(objectUrl)
+            ttsAudioRef.current = null
+            resolve()
+          }
+          audio.onerror = (e) => {
+            URL.revokeObjectURL(objectUrl)
+            ttsAudioRef.current = null
+            reject(e)
+          }
+          audio.play().catch(reject)
+        })
+      })
+  }
+
+  /** Reproduz texto em áudio: tenta TTS via API (Edge Function); se falhar, usa Web Speech API nativa. */
+  const speak = useCallback((text: string, onEnd?: () => void, _fromUserGesture?: boolean) => {
+    if (!text?.trim()) {
       onEnd?.()
       return
     }
-    unlockTTS()
-    const syn = window.speechSynthesis
-    syn.cancel()
     if (isVoiceModeRef.current) {
       isSpeakingRef.current = true
       setVoiceOverlayState('speaking')
     }
-    const u = new SpeechSynthesisUtterance(text.trim())
-    u.lang = 'en-US'
-    u.rate = 0.9
-    u.volume = 1
-    const voices = syn.getVoices()
-    const enVoice = voices.find((v) => v.lang.startsWith('en')) ?? voices[0]
-    if (enVoice) u.voice = enVoice
-    utteranceRef.current = u
     let ended = false
     const finish = () => {
       if (ended) return
@@ -145,26 +163,42 @@ export function Conversation() {
       isSpeakingRef.current = false
       onEnd?.()
     }
-    if (onEnd) u.onend = finish
-    u.onerror = (e) => {
-      console.warn('TTS error:', e)
-      finish()
-    }
-    syn.resume?.()
-    const doSpeak = () => syn.speak(u)
-    if (fromUserGesture) {
-      doSpeak()
-    } else {
-      setTimeout(doSpeak, 100)
-    }
-    if (onEnd) setTimeout(finish, 45000)
+    playTTSViaAPI(text)
+      .then(finish)
+      .catch(() => {
+        if (typeof window === 'undefined' || !window.speechSynthesis) {
+          finish()
+          return
+        }
+        unlockTTS()
+        window.speechSynthesis.cancel()
+        const u = new SpeechSynthesisUtterance(text.trim())
+        u.lang = 'en-US'
+        u.rate = 0.9
+        u.volume = 1
+        const syn = window.speechSynthesis
+        const voices = syn.getVoices()
+        const enVoice = voices.find((v) => v.lang.startsWith('en')) ?? voices[0]
+        if (enVoice) u.voice = enVoice
+        utteranceRef.current = u
+        u.onend = finish
+        u.onerror = finish
+        syn.resume?.()
+        syn.speak(u)
+        if (onEnd) setTimeout(finish, 45000)
+      })
   }, [])
 
   function stopTTSAndListen() {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause()
+      ttsAudioRef.current.currentTime = 0
+      ttsAudioRef.current = null
+    }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel()
-      isSpeakingRef.current = false
     }
+    isSpeakingRef.current = false
     maybeRestartVoiceListening()
   }
 
