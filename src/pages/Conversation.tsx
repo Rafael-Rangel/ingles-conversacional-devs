@@ -58,6 +58,7 @@ export function Conversation() {
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [voiceOverlayState, setVoiceOverlayState] = useState<'listening' | 'thinking' | 'speaking'>('listening')
+  const [lastVoiceReplyContent, setLastVoiceReplyContent] = useState<string>('')
   const [autoPlayVoice, setAutoPlayVoice] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -76,6 +77,7 @@ export function Conversation() {
   const sendMessageWithOptionsRef = useRef<(text: string, options?: { voice_mode?: boolean; from_transcription?: boolean }) => void>(() => {})
   const onTeacherMessageRef = useRef<(content: string, options?: { voiceMode?: boolean; playTTS?: boolean }) => void>(() => {})
   onTeacherMessageRef.current = (content: string, options) => {
+    if (options?.voiceMode) setLastVoiceReplyContent(content ?? '')
     const playTTS = options?.playTTS ?? (options?.voiceMode ? true : autoPlayVoice)
     if (playTTS) speak(content, options?.voiceMode ? () => maybeRestartVoiceListening() : undefined)
   }
@@ -117,32 +119,28 @@ export function Conversation() {
     const u = new SpeechSynthesisUtterance(text.trim())
     u.lang = 'en-US'
     u.rate = 0.9
+    const syn = window.speechSynthesis
+    const voices = syn.getVoices()
+    const enVoice = voices.find((v) => v.lang.startsWith('en')) ?? voices[0]
+    if (enVoice) u.voice = enVoice
     utteranceRef.current = u
-    if (onEnd) {
-      u.onend = () => {
-        isSpeakingRef.current = false
-        onEnd()
-      }
-    }
-    u.onerror = (e) => {
-      console.warn('TTS error:', e)
+    let ended = false
+    const finish = () => {
+      if (ended) return
+      ended = true
       isSpeakingRef.current = false
       onEnd?.()
     }
-    window.speechSynthesis.resume?.()
-    setTimeout(() => window.speechSynthesis.speak(u), 50)
-    // Inicia escuta durante TTS (modo voz) para detectar interrupção
-    if (isVoiceModeRef.current && SpeechRecognitionAPI && recognitionRef.current) {
-      try {
-        transcriptRef.current = ''
-        userStoppedRef.current = false
-        listeningModeRef.current = 'voice'
-        recognitionRef.current.start()
-        setIsListening(true)
-      } catch {
-        /* já escutando */
-      }
+    if (onEnd) u.onend = finish
+    u.onerror = (e) => {
+      console.warn('TTS error:', e)
+      finish()
     }
+    syn.resume?.()
+    // Não iniciar microfone durante TTS – deixa o áudio tocar; escuta só no onEnd
+    setTimeout(() => syn.speak(u), 80)
+    // Fallback: se onend não disparar (ex.: TTS bloqueado), voltar a escutar após 45s
+    if (onEnd) setTimeout(finish, 45000)
   }, [])
 
   function stopTTSAndListen() {
@@ -155,6 +153,7 @@ export function Conversation() {
 
   function maybeRestartVoiceListening() {
     if (!isVoiceModeRef.current || !SpeechRecognitionAPI || !recognitionRef.current) return
+    setLastVoiceReplyContent('')
     transcriptRef.current = ''
     userStoppedRef.current = false
     listeningModeRef.current = 'voice'
@@ -553,9 +552,18 @@ export function Conversation() {
               </p>
             )}
             {voiceOverlayState === 'speaking' && (
-              <p style={{ margin: '24px 0 0', fontSize: 14, color: 'var(--text-muted)', fontWeight: 600 }}>
-                Ouvindo resposta
-              </p>
+              <div style={{ marginTop: 24, maxWidth: 320, textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Resposta da IA
+                </p>
+                {lastVoiceReplyContent ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--text)', lineHeight: 1.5, maxHeight: 120, overflow: 'auto' }}>
+                    {lastVoiceReplyContent}
+                  </p>
+                ) : (
+                  <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Ouvindo resposta…</p>
+                )}
+              </div>
             )}
           </div>
           <div className="voice-controls">
