@@ -32,7 +32,12 @@ interface SpeechRecognitionInstance {
   lang: string
   onresult: ((e: SpeechRecognitionResultEvent) => void) | null
   onend: (() => void) | null
-  onerror: (() => void) | null
+  onerror: ((e: SpeechRecognitionErrorEvent) => void) | null
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+  message?: string
 }
 
 interface SpeechRecognitionResultEvent extends Event {
@@ -247,7 +252,7 @@ export function Conversation() {
       }
       if (mode === 'voice') {
         if (text) {
-          sendMessageWithOptionsRef.current(text, { voice_mode: true })
+          sendMessageWithOptionsRef.current(text, { voice_mode: true, from_transcription: true })
         } else if (isVoiceModeRef.current && recognitionRef.current) {
           // Silêncio sem texto – reinicia escuta
           transcriptRef.current = ''
@@ -264,9 +269,30 @@ export function Conversation() {
         }
       }
     }
-    rec.onerror = () => {
+    rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+      const err = e?.error ?? ''
       setIsListening(false)
       setIsTranscribing(false)
+      const mode = listeningModeRef.current
+      // Em modo voz: erros recuperáveis (no-speech, aborted) → reiniciar escuta em vez de matar
+      if (mode === 'voice' && isVoiceModeRef.current && recognitionRef.current) {
+        const recoverable = ['no-speech', 'aborted', 'audio-capture'].includes(err)
+        if (recoverable) {
+          transcriptRef.current = ''
+          userStoppedRef.current = false
+          listeningModeRef.current = 'voice'
+          setVoiceOverlayState('listening')
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start()
+              setIsListening(true)
+            } catch {
+              listeningModeRef.current = null
+            }
+          }, 400)
+          return
+        }
+      }
       transcriptRef.current = ''
       userStoppedRef.current = false
       listeningModeRef.current = null
@@ -284,11 +310,15 @@ export function Conversation() {
 
   function startListening(mode: ListeningMode) {
     if (!SpeechRecognitionAPI || !conversationId) return
+    const rec = recognitionRef.current
+    if (!rec) return
     transcriptRef.current = ''
     userStoppedRef.current = false
     listeningModeRef.current = mode
+    // Modo conversa: reconhecer em inglês (prática); transcrever/input em pt-BR
+    rec.lang = mode === 'voice' ? 'en-US' : 'pt-BR'
     try {
-      recognitionRef.current?.start()
+      rec.start()
       setIsListening(true)
       if (mode === 'transcribe') setIsTranscribing(true)
     } catch (e) {
@@ -332,7 +362,8 @@ export function Conversation() {
     }
     setIsVoiceMode(true)
     setVoiceOverlayState('listening')
-    startListening('voice')
+    // Pequeno delay para o overlay montar e o microfone estar pronto
+    setTimeout(() => startListening('voice'), 150)
   }
 
   async function startConversation() {
@@ -413,11 +444,11 @@ export function Conversation() {
       if (inserted) {
         setMessages((prev) => [...prev, inserted as Message])
         const voiceMode = !!options.voice_mode
-        const playTTS = voiceMode || autoPlayVoice
-        const fromTranscription = !!options.from_transcription
+        // Modo voz: sempre tocar resposta; transcrever no input: não tocar (evitar duplo áudio)
+        const playTTS = voiceMode ? true : (options.from_transcription ? false : autoPlayVoice)
         onTeacherMessageRef.current(teacherContent, {
           voiceMode,
-          playTTS: fromTranscription ? false : playTTS,
+          playTTS,
         })
       }
       const newCount = currentMessages.length + 1
