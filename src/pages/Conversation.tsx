@@ -3,6 +3,17 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { Lesson } from '@/types/database'
 import type { Message } from '@/types/database'
+import {
+  ArrowLeft,
+  MessageCircle,
+  Send,
+  Mic,
+  MicOff,
+  Volume2,
+  Headphones,
+  StopCircle,
+  ChevronRight,
+} from 'lucide-react'
 
 const SpeechRecognitionAPI =
   typeof window !== 'undefined' &&
@@ -32,6 +43,7 @@ export function Conversation() {
   messagesRef.current = messages
   isVoiceModeRef.current = isVoiceMode
 
+  const sendMessageWithOptionsRef = useRef<(text: string, options?: { voice_mode?: boolean; from_transcription?: boolean }) => void>(() => {})
   const onTeacherMessageRef = useRef<(content: string, options?: { voiceMode?: boolean; playTTS?: boolean }) => void>(() => {})
   onTeacherMessageRef.current = (content: string, options) => {
     const playTTS = options?.playTTS ?? (options?.voiceMode ? true : autoPlayVoice)
@@ -92,23 +104,45 @@ export function Conversation() {
     }
     rec.onend = () => {
       setIsListening(false)
-      const text = transcriptRef.current.trim()
-      transcriptRef.current = ''
       const mode = listeningModeRef.current
-      listeningModeRef.current = null
+      const text = transcriptRef.current.trim()
 
       if (!userStoppedRef.current) {
         userStoppedRef.current = false
+        // Parou sozinho (ex.: timeout "no-speech" do Chrome) – reinicia para continuar ouvindo
+        const canRestart = (mode === 'transcribe' || mode === 'voice' || mode === 'input') && recognitionRef.current
+        if (canRestart) {
+          setTimeout(() => {
+            try {
+              recognitionRef.current?.start()
+              setIsListening(true)
+            } catch {
+              transcriptRef.current = ''
+              listeningModeRef.current = null
+              if (mode === 'transcribe') setIsTranscribing(false)
+            }
+          }, 120)
+        } else {
+          transcriptRef.current = ''
+          listeningModeRef.current = null
+          if (mode === 'transcribe') setIsTranscribing(false)
+        }
         return
       }
+      transcriptRef.current = ''
+      listeningModeRef.current = null
       userStoppedRef.current = false
 
       if (mode === 'input' && text) setInput((prev) => (prev ? `${prev} ${text}` : text))
-      if (mode === 'transcribe' && text) sendMessageWithOptions(text, { from_transcription: true })
-      if (mode === 'voice' && text) sendMessageWithOptions(text, { voice_mode: true })
+      if (mode === 'transcribe' && text) {
+        setInput(text)
+        setTimeout(() => sendMessageWithOptionsRef.current(text, { from_transcription: true }), 400)
+      }
+      if (mode === 'voice' && text) sendMessageWithOptionsRef.current(text, { voice_mode: true })
     }
     rec.onerror = () => {
       setIsListening(false)
+      setIsTranscribing(false)
       transcriptRef.current = ''
       userStoppedRef.current = false
       listeningModeRef.current = null
@@ -129,9 +163,15 @@ export function Conversation() {
     transcriptRef.current = ''
     userStoppedRef.current = false
     listeningModeRef.current = mode
-    recognitionRef.current?.start()
-    setIsListening(true)
-    if (mode === 'transcribe') setIsTranscribing(true)
+    try {
+      recognitionRef.current?.start()
+      setIsListening(true)
+      if (mode === 'transcribe') setIsTranscribing(true)
+    } catch (e) {
+      console.error('Erro ao iniciar reconhecimento de voz:', e)
+      listeningModeRef.current = null
+      if (mode === 'transcribe') setIsTranscribing(false)
+    }
   }
 
   function stopListening() {
@@ -204,15 +244,26 @@ export function Conversation() {
         voice_mode: options.voice_mode ?? false,
         from_transcription: options.from_transcription ?? false,
       }
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-      const res = await fetch(`${supabaseUrl}/functions/v1/tutor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anonKey}` },
-        body: JSON.stringify(body),
+      const { data, error: invokeError } = await supabase.functions.invoke('tutor', {
+        body,
+        timeout: 90_000, // 90s – Groq pode demorar em cold start + latência
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error ?? `Request failed: ${res.status}`)
+      if (invokeError) {
+        let errMsg = invokeError.message ?? 'Request failed'
+        if (invokeError.name === 'FunctionsHttpError' && invokeError.context instanceof Response) {
+          const res = invokeError.context
+          try {
+            const body = await res.json().catch(() => res.text())
+            if (typeof body === 'object' && body?.error)
+              errMsg = body.details ? `${body.error}: ${body.details}` : String(body.error)
+            else if (typeof body === 'string' && body) errMsg = body
+            else errMsg = `Erro ${res.status} na Edge Function`
+          } catch {
+            errMsg = `Erro ${res.status} na Edge Function`
+          }
+        }
+        throw new Error(errMsg)
+      }
       if (data?.error) {
         const details = data.details ? `: ${data.details}` : ''
         throw new Error(`${data.error}${details}`)
@@ -278,6 +329,7 @@ export function Conversation() {
     const newMessages = [...messages, msg as Message]
     await fetchTeacherReply(conversationId, newMessages, options)
   }
+  sendMessageWithOptionsRef.current = sendMessageWithOptions
 
   async function sendMessage() {
     const text = input.trim()
@@ -297,14 +349,25 @@ export function Conversation() {
 
   const showStart = conversationId === null && messages.length === 0
 
+  const btnIcon = { size: 18 as const, strokeWidth: 2 }
+
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 120px)' }}>
-      <div className="animate-fade-in-down" style={{ marginBottom: 12, animation: 'fadeInDown 0.35s var(--ease-out-expo) forwards' }}>
+      <div style={{ marginBottom: 16, animation: 'fadeInDown 0.3s var(--ease-out-expo) both' }}>
         <Link to={`/lesson/${lessonId}`} className="link-back">
-          ← Voltar
+          <ArrowLeft size={16} />
+          Voltar
         </Link>
         {lesson && (
-          <h2 style={{ margin: '8px 0 0', fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-strong)' }}>
+          <h2
+            style={{
+              margin: '10px 0 0',
+              fontSize: '1.0625rem',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              letterSpacing: '-0.01em',
+            }}
+          >
             {lesson.title}
           </h2>
         )}
@@ -316,7 +379,7 @@ export function Conversation() {
           overflow: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
+          gap: 12,
           padding: '4px 0',
         }}
       >
@@ -327,28 +390,26 @@ export function Conversation() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 16,
-              padding: '24px 0',
+              gap: 20,
+              padding: '32px 0',
               opacity: 0,
-              animationDelay: '0.1s',
+              animationDelay: '0.08s',
             }}
           >
             <div
+              className="icon-wrap"
               style={{
                 width: 80,
                 height: 80,
                 borderRadius: 24,
                 background: 'var(--green-soft)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '2.5rem',
+                color: 'var(--green)',
                 animation: 'float 2.5s ease-in-out infinite',
               }}
             >
-              💬
+              <MessageCircle size={32} strokeWidth={1.5} />
             </div>
-            <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 600, textAlign: 'center' }}>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 500, fontSize: 14, textAlign: 'center', maxWidth: 280 }}>
               Pronto para praticar? O professor IA vai guiar a conversa.
             </p>
             <button
@@ -357,6 +418,7 @@ export function Conversation() {
               disabled={loading || !lesson}
               className="btn-primary"
             >
+              <ChevronRight size={20} strokeWidth={2} />
               {loading ? 'Starting…' : 'Start conversation'}
             </button>
           </div>
@@ -368,36 +430,39 @@ export function Conversation() {
             style={{
               alignSelf: m.role === 'student' ? 'flex-end' : 'flex-start',
               maxWidth: '88%',
-              padding: '14px 18px',
-              borderRadius: m.role === 'student' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              padding: '14px 16px',
+              borderRadius: m.role === 'student' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
               background: m.role === 'teacher' ? 'var(--surface)' : 'var(--green)',
               color: m.role === 'teacher' ? 'var(--text-strong)' : 'white',
-              boxShadow: m.role === 'teacher' ? 'var(--shadow)' : '0 2px 0 var(--green-dark)',
-              border: m.role === 'teacher' ? '1px solid var(--border)' : 'none',
+              boxShadow: m.role === 'student' ? '0 4px 0 var(--green-dark)' : 'var(--shadow)',
+              border: m.role === 'teacher' ? '2px solid var(--border)' : 'none',
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
+              gap: 10,
             }}
           >
-            <span style={{ lineHeight: 1.5 }}>{m.content}</span>
+            <span style={{ lineHeight: 1.55, fontSize: 14 }}>{m.content}</span>
             {m.role === 'teacher' && (
               <button
                 type="button"
                 onClick={() => speak(m.content)}
                 style={{
                   alignSelf: 'flex-start',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
                   fontSize: 12,
-                  padding: '6px 12px',
+                  padding: '6px 10px',
                   background: 'var(--green-soft)',
                   border: 'none',
-                  borderRadius: 10,
+                  borderRadius: 'var(--radius-sm)',
                   color: 'var(--green-dark)',
                   cursor: 'pointer',
-                  fontWeight: 700,
-                  transition: 'transform 0.2s, background 0.2s',
+                  fontWeight: 500,
                 }}
               >
-                🔊 Ouvir
+                <Volume2 size={14} strokeWidth={2} />
+                Ouvir
               </button>
             )}
           </div>
@@ -407,27 +472,26 @@ export function Conversation() {
             className="animate-slide-in-left"
             style={{
               alignSelf: 'flex-start',
-              padding: '14px 20px',
-              borderRadius: '18px 18px 18px 4px',
+              padding: '14px 18px',
+              borderRadius: '14px 14px 14px 4px',
               background: 'var(--surface)',
               border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow)',
               display: 'flex',
               gap: 6,
               alignItems: 'center',
-              animation: 'slideInLeft 0.3s var(--ease-out-expo) both',
+              animation: 'slideInLeft 0.25s var(--ease-out-expo) both',
             }}
           >
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
                 style={{
-                  width: 8,
-                  height: 8,
+                  width: 6,
+                  height: 6,
                   borderRadius: '50%',
-                  background: 'var(--text-muted)',
-                  animation: 'dotPulse 1.2s ease-in-out infinite',
-                  animationDelay: `${i * 0.15}s`,
+                  background: 'var(--text-subtle)',
+                  animation: 'dotPulse 1s ease-in-out infinite',
+                  animationDelay: `${i * 0.12}s`,
                 }}
               />
             ))}
@@ -442,8 +506,8 @@ export function Conversation() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
-            paddingTop: 12,
+            gap: 12,
+            paddingTop: 16,
             borderTop: '1px solid var(--border)',
             background: 'var(--bg)',
             opacity: 0,
@@ -455,17 +519,17 @@ export function Conversation() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              fontSize: 14,
+              fontSize: 13,
               color: 'var(--text-muted)',
               cursor: 'pointer',
-              fontWeight: 600,
+              fontWeight: 500,
             }}
           >
             <input
               type="checkbox"
               checked={autoPlayVoice}
               onChange={(e) => setAutoPlayVoice(e.target.checked)}
-              style={{ accentColor: 'var(--green)', width: 18, height: 18, cursor: 'pointer' }}
+              style={{ accentColor: 'var(--green)', width: 16, height: 16, cursor: 'pointer' }}
             />
             Ouvir resposta em áudio (exceto em Transcrever)
           </label>
@@ -475,80 +539,98 @@ export function Conversation() {
               <button
                 type="button"
                 onClick={toggleTranscribe}
-                title={isTranscribing ? 'Parar e enviar transcrição' : 'Transcrever: gravar fala e enviar como texto'}
+                title={isTranscribing ? 'Parar e enviar' : 'Transcrever'}
+                className="btn-secondary"
                 style={{
                   padding: '10px 14px',
-                  borderRadius: 14,
-                  border: '2px solid var(--border)',
-                  background: isTranscribing ? 'var(--error)' : 'var(--surface)',
-                  color: isTranscribing ? 'white' : 'var(--text-strong)',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
+                  background: isTranscribing ? 'var(--error)' : undefined,
+                  color: isTranscribing ? 'white' : undefined,
+                  borderColor: isTranscribing ? 'var(--error)' : undefined,
                 }}
               >
-                {isTranscribing ? '⏹ Parar e enviar' : '🎙️ Transcrever'}
+                {isTranscribing ? (
+                  <>
+                    <StopCircle {...btnIcon} />
+                    Parar e enviar
+                  </>
+                ) : (
+                  <>
+                    <Mic {...btnIcon} />
+                    Transcrever
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 onClick={isVoiceMode && isListening ? stopListening : toggleVoiceMode}
                 title={
                   isVoiceMode && isListening
-                    ? 'Parar e enviar (resposta em áudio, depois nova escuta)'
+                    ? 'Parar e enviar'
                     : isVoiceMode
-                      ? 'Encerrar conversa por voz'
-                      : 'Conversar: modo voz contínuo (fala ↔ resposta em áudio)'
+                      ? 'Encerrar voz'
+                      : 'Conversar (modo voz contínuo)'
                 }
+                className="btn-secondary"
                 style={{
                   padding: '10px 14px',
-                  borderRadius: 14,
-                  border: '2px solid var(--border)',
-                  background: isVoiceMode ? 'var(--blue)' : 'var(--surface)',
-                  color: isVoiceMode ? 'white' : 'var(--text-strong)',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
+                  background: isVoiceMode ? 'var(--blue)' : undefined,
+                  color: isVoiceMode ? 'white' : undefined,
+                  borderColor: isVoiceMode ? 'var(--blue)' : undefined,
                 }}
               >
-                {isVoiceMode && isListening ? '⏹ Parar e enviar' : isVoiceMode ? '🔊 Encerrar voz' : '🎧 Conversar'}
+                {isVoiceMode && isListening ? (
+                  <>
+                    <StopCircle {...btnIcon} />
+                    Parar e enviar
+                  </>
+                ) : isVoiceMode ? (
+                  <>
+                    <Headphones {...btnIcon} />
+                    Encerrar voz
+                  </>
+                ) : (
+                  <>
+                    <Headphones {...btnIcon} />
+                    Conversar
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 onClick={toggleVoiceInput}
-                title={isListening && listeningModeRef.current === 'input' ? 'Parar' : 'Falar e colocar no campo (depois Enviar)'}
+                title={
+                  isListening && listeningModeRef.current === 'input'
+                    ? 'Parar'
+                    : 'Falar e colocar no campo'
+                }
+                className="btn-secondary"
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 14,
-                  border: '2px solid var(--border)',
-                  background: isListening && listeningModeRef.current === 'input' ? 'var(--green)' : 'var(--surface)',
-                  color: isListening && listeningModeRef.current === 'input' ? 'white' : 'var(--text-strong)',
-                  cursor: 'pointer',
-                  fontSize: '1.25rem',
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  width: 44,
+                  height: 44,
+                  padding: 0,
+                  background:
+                    isListening && listeningModeRef.current === 'input' ? 'var(--green)' : undefined,
+                  color: isListening && listeningModeRef.current === 'input' ? 'white' : undefined,
+                  borderColor:
+                    isListening && listeningModeRef.current === 'input' ? 'var(--green)' : undefined,
                 }}
               >
-                {isListening && listeningModeRef.current === 'input' ? '⏹' : '🎤'}
+                {isListening && listeningModeRef.current === 'input' ? (
+                  <MicOff {...btnIcon} />
+                ) : (
+                  <Mic {...btnIcon} />
+                )}
               </button>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Digite ou use Transcrever / Conversar..."
+              placeholder="Digite ou use Transcrever / Conversar"
               className="input"
               style={{ flex: 1, margin: 0 }}
             />
@@ -557,8 +639,9 @@ export function Conversation() {
               onClick={sendMessage}
               disabled={loading || !input.trim()}
               className="btn-primary"
-              style={{ padding: '12px 20px', flexShrink: 0 }}
+              style={{ padding: '12px 18px', flexShrink: 0 }}
             >
+              <Send size={18} strokeWidth={2} />
               Enviar
             </button>
           </div>

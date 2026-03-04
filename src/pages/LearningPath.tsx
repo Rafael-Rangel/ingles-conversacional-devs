@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import type { LevelWithModules } from '@/types/database'
+import { BookOpen, MessageCircle, ChevronRight } from 'lucide-react'
 
 export function LearningPath() {
   const [levels, setLevels] = useState<LevelWithModules[]>([])
@@ -60,35 +61,27 @@ export function LearningPath() {
     return (
       <div
         className="animate-fade-in"
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: 40 }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: 48 }}
       >
         <div
+          className="icon-wrap"
           style={{
             width: 64,
             height: 64,
-            borderRadius: 20,
+            borderRadius: 18,
             background: 'var(--green-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '2rem',
+            color: 'var(--green)',
             animation: 'float 2s ease-in-out infinite',
           }}
         >
-          📚
+          <BookOpen size={32} strokeWidth={1.75} />
         </div>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 700 }}>Carregando trilha…</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 320 }}>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 500, fontSize: 14 }}>
+          Carregando trilha
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 340 }}>
           {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="skeleton"
-              style={{
-                height: 56,
-                borderRadius: 'var(--radius)',
-                animationDelay: `${i * 0.08}s`,
-              }}
-            />
+            <div key={i} className="skeleton" style={{ height: 52, borderRadius: 'var(--radius)' }} />
           ))}
         </div>
       </div>
@@ -97,11 +90,8 @@ export function LearningPath() {
 
   if (!levels.length) {
     return (
-      <div
-        className="card animate-scale-in animate-once"
-        style={{ textAlign: 'center', padding: 32 }}
-      >
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 600 }}>
+      <div className="card animate-scale-in animate-once" style={{ textAlign: 'center', padding: 32 }}>
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 500, fontSize: 14 }}>
           Nenhum nível cadastrado. Execute o seed do Supabase.
         </p>
       </div>
@@ -111,14 +101,18 @@ export function LearningPath() {
   let staggerIndex = 0
   return (
     <div className="animate-fade-in">
-      <div
-        className="animate-fade-in-up animate-once"
-        style={{ marginBottom: 24 }}
-      >
-        <h2 style={{ margin: '0 0 6px', fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-strong)' }}>
+      <div className="animate-fade-in-up animate-once" style={{ marginBottom: 28 }}>
+        <h2
+          style={{
+            margin: '0 0 6px',
+            fontSize: '1.5rem',
+            fontWeight: 800,
+            color: 'var(--text-strong)',
+          }}
+        >
           Trilha de aprendizado
         </h2>
-        <p style={{ margin: 0, fontSize: 15, color: 'var(--text-muted)' }}>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
           Escolha uma aula e pratique com o professor IA.
         </p>
       </div>
@@ -130,17 +124,17 @@ export function LearningPath() {
             key={level.id}
             className="animate-fade-in-up animate-once"
             style={{
-              marginBottom: 28,
+              marginBottom: 32,
               opacity: 0,
-              animationDelay: `${0.1 + sectionStagger * 0.06}s`,
+              animationDelay: `${0.08 + sectionStagger * 0.05}s`,
             }}
           >
             <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '8px 14px',
+                gap: 10,
+                padding: '10px 18px',
                 borderRadius: 'var(--radius-pill)',
                 background: 'var(--green-soft)',
                 marginBottom: 16,
@@ -163,7 +157,7 @@ export function LearningPath() {
               >
                 {levelIdx + 1}
               </span>
-              <span style={{ fontWeight: 800, color: 'var(--green-dark)', fontSize: '1rem' }}>
+              <span style={{ fontWeight: 800, color: 'var(--green-dark)', fontSize: 15 }}>
                 {level.code} — {level.name}
               </span>
             </div>
@@ -172,18 +166,19 @@ export function LearningPath() {
               <div key={mod.id} style={{ marginBottom: 20 }}>
                 <h3
                   style={{
-                    margin: '0 0 12px',
-                    fontSize: '0.9375rem',
-                    fontWeight: 700,
+                    margin: '0 0 10px',
+                    fontSize: 13,
+                    fontWeight: 500,
                     color: 'var(--text-muted)',
-                    paddingLeft: 4,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                   }}
                 >
                   {mod.title}
                 </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {mod.lessons.map((lesson, lessonIdx) => {
-                    const delay = 0.15 + sectionStagger * 0.06 + lessonIdx * 0.04
+                    const delay = 0.12 + sectionStagger * 0.05 + lessonIdx * 0.03
                     return (
                       <Link
                         key={lesson.id}
@@ -195,7 +190,7 @@ export function LearningPath() {
                           display: 'flex',
                           alignItems: 'center',
                           gap: 14,
-                          padding: '14px 18px',
+                          padding: '16px 18px',
                           background: 'var(--surface)',
                           border: '2px solid var(--border)',
                           borderRadius: 'var(--radius)',
@@ -203,27 +198,22 @@ export function LearningPath() {
                           color: 'var(--text-strong)',
                           fontWeight: 700,
                           boxShadow: 'var(--shadow)',
-                          transition: 'border-color var(--dur-normal), box-shadow var(--dur-normal), transform var(--dur-fast) var(--ease-out-back)',
                         }}
                       >
-                        <span
+                        <div
+                          className="icon-wrap"
                           style={{
-                            width: 40,
-                            height: 40,
+                            width: 44,
+                            height: 44,
                             borderRadius: 12,
                             background: 'var(--green-soft)',
                             color: 'var(--green-dark)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '1.125rem',
-                            flexShrink: 0,
                           }}
                         >
-                          💬
-                        </span>
-                        <span style={{ flex: 1 }}>{lesson.title}</span>
-                        <span style={{ color: 'var(--green)', fontSize: '1.25rem', transition: 'transform var(--dur-fast)' }}>→</span>
+                          <MessageCircle size={20} strokeWidth={1.75} />
+                        </div>
+                        <span style={{ flex: 1, fontSize: 15 }}>{lesson.title}</span>
+                        <ChevronRight size={22} style={{ color: 'var(--green)' }} />
                       </Link>
                     )
                   })}

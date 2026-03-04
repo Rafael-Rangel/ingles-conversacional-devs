@@ -128,7 +128,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
         messages: chatMessages,
-        max_tokens: isVoiceMode ? 150 : 512,
+        max_tokens: isVoiceMode ? 150 : 256,
         temperature: 0.7,
       }),
     })

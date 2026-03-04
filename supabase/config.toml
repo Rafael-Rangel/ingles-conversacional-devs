@@ -1,0 +1,5 @@
+# Configuração das Edge Functions
+# Desabilita verificação JWT para tutor (aceita anon key / chave publishable)
+# A autenticação de conversas/mensagens continua via RLS no banco
+[functions.tutor]
+verify_jwt = false

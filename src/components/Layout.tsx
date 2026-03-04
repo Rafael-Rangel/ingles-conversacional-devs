@@ -1,5 +1,6 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { BookOpen, LogOut } from 'lucide-react'
 
 export function Layout() {
   return (
@@ -9,7 +10,7 @@ export function Layout() {
         minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
-        maxWidth: 480,
+        maxWidth: 520,
         margin: '0 auto',
         background: 'var(--bg)',
       }}
@@ -19,52 +20,53 @@ export function Layout() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '16px 20px',
+          padding: '16px 24px',
           background: 'var(--surface)',
           borderBottom: '1px solid var(--border)',
-          boxShadow: 'var(--shadow)',
-          animation: 'fadeInDown 0.45s var(--ease-out-expo) both',
+          animation: 'fadeInDown 0.4s var(--ease-out-expo) both',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            className="icon-wrap"
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 12,
+              width: 44,
+              height: 44,
+              borderRadius: 14,
               background: 'var(--green)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.25rem',
-              boxShadow: '0 2px 0 var(--green-dark)',
-              transition: 'transform 0.2s var(--ease-spring)',
+              color: 'white',
+              boxShadow: '0 4px 0 var(--green-dark)',
             }}
-            aria-hidden
           >
-            📚
-          </span>
-          <h1
+            <BookOpen size={24} strokeWidth={2} />
+          </div>
+          <Link
+            to="/"
             style={{
               margin: 0,
               fontSize: '1.25rem',
               fontWeight: 800,
               color: 'var(--text-strong)',
+              textDecoration: 'none',
+              transition: 'color 0.15s',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--green)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-strong)' }}
           >
             Inglês para Devs
-          </h1>
+          </Link>
         </div>
         <button
           type="button"
           className="btn-secondary"
-          style={{ padding: '8px 14px', fontSize: 14 }}
+          style={{ padding: '8px 12px', fontSize: 13 }}
           onClick={() => supabase.auth.signOut()}
         >
+          <LogOut size={16} />
           Sair
         </button>
       </header>
-      <main style={{ flex: 1, padding: '20px' }}>
+      <main style={{ flex: 1, padding: '24px' }}>
         <Outlet />
       </main>
     </div>

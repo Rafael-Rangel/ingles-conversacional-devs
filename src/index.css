@@ -1,48 +1,54 @@
-/* Tema inspirado em app de estudos (ex.: Duolingo) — claro e amigável */
+/* Tema gamificado — referência Duolingo */
 :root {
-  /* Cores principais */
   --green: #58CC02;
   --green-light: #89E219;
   --green-dark: #46a302;
-  --green-soft: rgba(88, 204, 2, 0.12);
+  --green-soft: rgba(88, 204, 2, 0.15);
+  --green-muted: rgba(88, 204, 2, 0.08);
+
+  --primary: var(--green);
+  --primary-light: var(--green-light);
+  --primary-dark: var(--green-dark);
+  --primary-soft: var(--green-soft);
+  --primary-muted: var(--green-muted);
 
   --bg: #FFFFFF;
-  --bg-subtle: #F7F7F7;
+  --bg-subtle: #F7F9FC;
   --surface: #FFFFFF;
   --surface-hover: #F0F0F0;
-  --border: #E5E5E5;
-  --border-strong: #D1D1D1;
+  --border: #E8E8E8;
+  --border-strong: #D0D0D0;
 
-  --text: #4B4B4B;
+  --text: #3C3C3C;
   --text-strong: #1F1F1F;
   --text-muted: #777777;
-
-  --accent: var(--green);
-  --accent-hover: var(--green-light);
-  --accent-pressed: var(--green-dark);
 
   --success: #58CC02;
   --error: #FF4B4B;
   --error-soft: rgba(255, 75, 75, 0.12);
-  --warning: #FFC800;
   --blue: #1CB0F6;
+  --orange: #FF9600;
 
   --radius: 16px;
   --radius-sm: 12px;
+  --radius-lg: 20px;
   --radius-pill: 9999px;
+  --radius-chunky: 14px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-btn: 0 4px 0 var(--green-dark);
+  --shadow-btn-hover: 0 6px 0 var(--green-dark);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 4px 12px rgba(88, 204, 2, 0.08);
 
   --safe-top: env(safe-area-inset-top, 0);
   --safe-bottom: env(safe-area-inset-bottom, 0);
 
-  /* Animações — duração e easing */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  --dur-fast: 0.2s;
-  --dur-normal: 0.35s;
-  --dur-slow: 0.5s;
+  --dur-fast: 0.15s;
+  --dur-normal: 0.25s;
+  --dur-slow: 0.4s;
 }
 
 * {
@@ -56,13 +62,14 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg) 20%);
   color: var(--text);
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -81,29 +88,30 @@ textarea {
 }
 
 a {
-  color: var(--accent);
+  color: var(--green);
   text-decoration: none;
 }
 
-/* Botão primário (verde, estilo Duolingo) */
+/* Botão primário — 3D estilo Duolingo */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 14px 24px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-chunky);
   border: none;
   background: var(--green);
   color: white;
   font-weight: 800;
   font-size: 1rem;
-  box-shadow: 0 4px 0 var(--green-dark);
+  box-shadow: var(--shadow-btn);
   transition: transform var(--dur-fast) var(--ease-out-back), box-shadow var(--dur-fast), background var(--dur-fast);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--green-light);
   transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 0 var(--green-dark);
+  box-shadow: var(--shadow-btn-hover);
 }
 .btn-primary:active:not(:disabled) {
   transform: translateY(2px) scale(0.98);
@@ -114,43 +122,44 @@ a {
   cursor: not-allowed;
 }
 
-/* Botão secundário (outline) */
+/* Botão secundário — outline com bounce */
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 20px;
-  border-radius: var(--radius);
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-chunky);
   border: 2px solid var(--border-strong);
   background: var(--surface);
   color: var(--text-strong);
   font-weight: 700;
-  transition: background var(--dur-normal), border-color var(--dur-normal), color var(--dur-normal), transform var(--dur-fast);
+  transition: border-color var(--dur-normal), color var(--dur-normal), transform var(--dur-fast) var(--ease-spring);
 }
 .btn-secondary:hover {
-  background: var(--surface-hover);
   border-color: var(--green);
   color: var(--green);
-  transform: scale(1.02);
+  transform: scale(1.03);
 }
 .btn-secondary:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
-/* Card de conteúdo */
+/* Card — bordas arredondadas, sombra suave */
 .card {
   background: var(--surface);
-  border-radius: var(--radius);
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: 24px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border);
-  transition: box-shadow var(--dur-normal), transform var(--dur-normal);
+  border: 2px solid var(--border);
+  transition: box-shadow var(--dur-normal), transform var(--dur-fast);
 }
 .card:hover {
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
 }
 
-/* Input de formulário */
+/* Input — bordas arredondadas */
 .input {
   width: 100%;
   padding: 14px 16px;
@@ -159,227 +168,122 @@ a {
   background: var(--surface);
   color: var(--text-strong);
   font-size: 1rem;
-  transition: border-color var(--dur-normal), box-shadow var(--dur-normal), transform var(--dur-fast);
+  font-weight: 600;
+  transition: border-color var(--dur-normal), box-shadow var(--dur-normal);
 }
 .input:focus {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--green-soft);
-  transform: scale(1.01);
 }
 .input::placeholder {
   color: var(--text-muted);
+  font-weight: 500;
 }
 
-/* ========== Animações globais ========== */
+.icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ========== Animações ========== */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.75; transform: scale(1.05); }
-}
-@keyframes pulseSoft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40% { transform: scale(1.2); opacity: 1; }
 }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes dotPulse {
-  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-  40% { transform: scale(1.2); opacity: 1; }
-}
-@keyframes progressIndeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
 }
 
-/* Classes de animação de entrada */
-.animate-fade-in {
-  animation: fadeIn var(--dur-slow) var(--ease-out-expo) forwards;
-}
-.animate-fade-in-up {
-  animation: fadeInUp var(--dur-slow) var(--ease-out-expo) both;
-}
-.animate-scale-in {
-  animation: scaleIn var(--dur-slow) var(--ease-out-back) both;
-}
-.animate-slide-up {
-  animation: slideUp var(--dur-normal) var(--ease-out-expo) both;
-}
-.animate-slide-in-right {
-  animation: slideInRight var(--dur-normal) var(--ease-out-expo) forwards;
-}
-.animate-slide-in-left {
-  animation: slideInLeft var(--dur-normal) var(--ease-out-expo) forwards;
-}
+.animate-fade-in { animation: fadeIn var(--dur-slow) var(--ease-out-expo) forwards; }
+.animate-fade-in-up { animation: fadeInUp var(--dur-slow) var(--ease-out-expo) both; }
+.animate-scale-in { animation: scaleIn var(--dur-slow) var(--ease-out-back) both; }
+.animate-slide-in-right { animation: slideInRight var(--dur-normal) var(--ease-out-expo) both; }
+.animate-slide-in-left { animation: slideInLeft var(--dur-normal) var(--ease-out-expo) both; }
 
-/* Stagger delays para listas */
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.1s; }
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.2s; }
-.stagger-5 { animation-delay: 0.25s; }
-.stagger-6 { animation-delay: 0.3s; }
-.stagger-7 { animation-delay: 0.35s; }
-.stagger-8 { animation-delay: 0.4s; }
-.stagger-9 { animation-delay: 0.45s; }
-.stagger-10 { animation-delay: 0.5s; }
+.animate-once { opacity: 0; }
 
-/* Skeleton loading */
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--border) 0%,
-    var(--surface-hover) 50%,
-    var(--border) 100%
-  );
+  background: linear-gradient(90deg, var(--border) 0%, var(--surface-hover) 50%, var(--border) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius-sm);
 }
 
-/* Estado inicial para animações (evitar flash) */
-.animate-once {
-  opacity: 0;
-}
-
-/* Respeitar preferência de movimento reduzido */
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-fade-in-up,
-  .animate-scale-in,
-  .animate-slide-up,
-  .animate-slide-in-right,
-  .animate-slide-in-left {
-    animation-duration: 0.01ms;
-    animation-timing-function: step-end;
-  }
-  .animate-once { opacity: 1; }
-  .skeleton { animation: none; background: var(--border); }
-  .msg-bubble-student,
-  .msg-bubble-teacher { animation: none; }
-  .btn-primary:hover:not(:disabled),
-  .btn-secondary:hover { transform: none; }
-  .lesson-card:hover { transform: none; }
-  .lesson-card:hover span:last-of-type { transform: none; }
-}
-
-/* Badge / chip */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  font-size: 0.875rem;
-  font-weight: 700;
-  background: var(--green-soft);
-  color: var(--green-dark);
-}
-
-/* Link de volta */
 .link-back {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 0.9375rem;
-  font-weight: 600;
-  transition: color 0.15s;
+  font-weight: 700;
+  transition: color var(--dur-fast);
 }
-.link-back:hover {
-  color: var(--green);
-}
+.link-back:hover { color: var(--green); }
 
-/* Card de aula na trilha — hover */
+/* Lesson card — hover gamificado */
+.lesson-card {
+  transition: border-color var(--dur-normal), box-shadow var(--dur-normal), transform var(--dur-fast) var(--ease-spring) !important;
+}
 .lesson-card:hover {
   border-color: var(--green) !important;
-  box-shadow: var(--shadow-lg) !important;
-  transform: translateY(-3px);
+  box-shadow: var(--shadow-card) !important;
+  transform: translateY(-4px) scale(1.01) !important;
 }
-.lesson-card:hover span:last-of-type {
-  transform: translateX(4px);
-}
-
-/* Bolhas do chat — entrada */
-.msg-bubble-student {
-  animation: slideInRight var(--dur-normal) var(--ease-out-expo) both;
-}
-.msg-bubble-teacher {
-  animation: slideInLeft var(--dur-normal) var(--ease-out-expo) both;
+.lesson-card:active {
+  transform: translateY(-1px) scale(0.99) !important;
 }
 
+.msg-bubble-student { animation: slideInRight var(--dur-normal) var(--ease-out-expo) both; }
+.msg-bubble-teacher { animation: slideInLeft var(--dur-normal) var(--ease-out-expo) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in, .animate-fade-in-up, .animate-scale-in,
+  .animate-slide-in-right, .animate-slide-in-left { animation: none; opacity: 1; }
+  .animate-once { opacity: 1; }
+  .skeleton { animation: none; background: var(--border); }
+  .msg-bubble-student, .msg-bubble-teacher { animation: none; }
+  .btn-primary:hover:not(:disabled),
+  .btn-secondary:hover { transform: none; }
+  .lesson-card:hover { transform: none !important; }
+  .card:hover { transform: none; }
+}

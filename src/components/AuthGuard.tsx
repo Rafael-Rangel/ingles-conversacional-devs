@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { BookOpen } from 'lucide-react'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
@@ -32,39 +33,38 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           justifyContent: 'center',
           gap: 24,
           padding: 24,
-          background: 'linear-gradient(180deg, var(--bg-subtle) 0%, var(--bg) 50%)',
+          background: 'var(--bg)',
         }}
       >
         <div
+          className="icon-wrap"
           style={{
-            width: 80,
-            height: 80,
-            borderRadius: 24,
+            width: 72,
+            height: 72,
+            borderRadius: 20,
             background: 'var(--green)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '2.5rem',
+            color: 'white',
             boxShadow: '0 6px 0 var(--green-dark)',
             animation: 'float 2s ease-in-out infinite',
           }}
         >
-          📚
+          <BookOpen size={36} strokeWidth={1.75} />
         </div>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 700, fontSize: 15 }}>
-          Carregando…
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontWeight: 500, fontSize: 14 }}>
+          Carregando
         </p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           {[0, 1, 2].map((i) => (
             <span
               key={i}
               style={{
-                width: 8,
-                height: 8,
+                width: 6,
+                height: 6,
                 borderRadius: '50%',
                 background: 'var(--green)',
-                animation: 'dotPulse 1.4s ease-in-out infinite',
-                animationDelay: `${i * 0.16}s`,
+                opacity: 0.6,
+                animation: 'dotPulse 1.2s ease-in-out infinite',
+                animationDelay: `${i * 0.12}s`,
               }}
             />
           ))}
