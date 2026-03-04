@@ -2,6 +2,9 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  [build.environment]
+    # VITE_SUPABASE_* são variáveis públicas (anon key + URL) — permitidas no bundle do cliente
+    SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL"
 
 # SPA: todas as rotas redirecionam para index.html
 [[redirects]]
