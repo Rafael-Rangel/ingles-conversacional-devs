@@ -30,6 +30,11 @@ const VOICE_MODE_SYSTEM_APPENDIX = `You are now in VOICE conversation mode.
 - Sound human and dynamic. Use natural transitions like "Boa pergunta! Funciona assim…" or "Deixa eu te explicar de um jeito simples."
 - Do not use robotic or formal language. Keep it like real-time spoken conversation.`
 
+const CLEAN_TRANSCRIPT_PROMPT = `You receive a messy speech-to-text transcript with repetitions (the same phrase repeated as the user kept speaking).
+Your job: output ONLY a clean, coherent version of what the person actually said. Remove redundant repetitions. Keep the meaning and flow.
+Do NOT correct grammar, spelling, or vocabulary mistakes - this is for a language lesson. Keep words as spoken (even if wrong).
+Output ONLY the cleaned text. No explanation, no quotes, no prefix.`
+
 const TRANSCRIPTION_SYSTEM_APPENDIX = `This message came from speech-to-text (transcription).
 - Do NOT mention that it was a transcription. Respond as if the student had typed.
 - If the message is unclear or confusing, reply only: "Não entendi muito bem, pode repetir?"
@@ -98,9 +103,39 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 200, headers: jsonHeaders })
     }
 
-    const { lesson, messages, voice_mode, from_transcription } = body
+    let { lesson, messages, voice_mode, from_transcription } = body
     if (!lesson?.title || !lesson?.context) {
       return new Response(JSON.stringify({ error: "lesson.title and lesson.context required" }), { status: 200, headers: jsonHeaders })
+    }
+
+    // Limpa transcrição repetida com IA antes de enviar ao professor
+    if (from_transcription && Array.isArray(messages) && messages.length > 0) {
+      const lastIdx = messages.length - 1
+      const lastMsg = messages[lastIdx]
+      if (lastMsg?.role === "student" && lastMsg.content?.trim()) {
+        const raw = lastMsg.content.trim()
+        const cleanRes = await fetch(GROQ_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            messages: [
+              { role: "system", content: CLEAN_TRANSCRIPT_PROMPT },
+              { role: "user", content: raw },
+            ],
+            max_tokens: 256,
+            temperature: 0.2,
+          }),
+        })
+        if (cleanRes.ok) {
+          const cleanData = await cleanRes.json()
+          const cleaned = cleanData?.choices?.[0]?.message?.content?.trim()
+          if (cleaned) {
+            messages = [...messages]
+            messages[lastIdx] = { ...lastMsg, content: cleaned }
+          }
+        }
+      }
     }
 
     const systemPrompt = buildSystemPrompt(lesson, { voice_mode: !!voice_mode, from_transcription: !!from_transcription })

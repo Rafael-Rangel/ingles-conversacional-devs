@@ -114,11 +114,19 @@ export function Conversation() {
     rec.interimResults = true
     rec.lang = 'pt-BR'
     rec.onresult = (e: SpeechRecognitionResultEvent) => {
-      let final = ''
+      // Chrome envia resultados progressivos (Olá → Olá tudo → Olá tudo bem) – pegar só o último
+      let lastFinal = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript
+        if (e.results[i].isFinal) lastFinal = e.results[i][0].transcript.trim()
       }
-      if (final) transcriptRef.current = (transcriptRef.current + ' ' + final).trim()
+      if (!lastFinal) return
+      const prev = transcriptRef.current.trim()
+      // Se o novo contém o anterior (refinamento do mesmo trecho), substitui
+      if (prev && lastFinal.toLowerCase().startsWith(prev.toLowerCase())) {
+        transcriptRef.current = lastFinal
+      } else {
+        transcriptRef.current = (prev ? prev + ' ' + lastFinal : lastFinal).trim()
+      }
     }
     rec.onend = () => {
       setIsListening(false)
