@@ -65,6 +65,7 @@ export function Conversation() {
   const isSpeakingRef = useRef(false)
   const ttsUnlockedRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
+  const recognitionStartingRef = useRef(false)
   const transcriptRef = useRef<string>('')
   const userStoppedRef = useRef(false)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
@@ -116,17 +117,41 @@ export function Conversation() {
   function playTTSViaAPI(text: string): Promise<void> {
     const url = import.meta.env.VITE_SUPABASE_URL
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-    if (!url || !key || !text?.trim()) return Promise.reject(new Error('Missing config or text'))
-    return fetch(`${url}/functions/v1/tts`, {
+    if (!url || !key || !text?.trim()) {
+      const err = new Error('Missing config or text')
+      console.error('[TTS]', err.message, { hasUrl: !!url, hasKey: !!key, textLen: text?.trim()?.length })
+      return Promise.reject(err)
+    }
+    const ttsUrl = `${url}/functions/v1/tts`
+    console.log('[TTS] Chamando API:', ttsUrl, 'texto:', text.trim().slice(0, 50) + (text.length > 50 ? '…' : ''))
+    return fetch(ttsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ text: text.trim().slice(0, 1000) }),
     })
       .then((res) => {
-        if (!res.ok) return res.json().then((j) => Promise.reject(new Error(j?.error || res.statusText)))
+        if (!res.ok) {
+          return res
+            .text()
+            .then((body) => {
+              let msg = body
+              try {
+                const j = JSON.parse(body)
+                msg = j?.error || j?.details || body
+              } catch {
+                /* use body as-is */
+              }
+              console.error('[TTS] Resposta errada:', res.status, msg)
+              return Promise.reject(new Error(msg))
+            })
+        }
         return res.blob()
       })
       .then((blob) => {
+        if (!blob.size) {
+          console.error('[TTS] Áudio vazio (blob size 0)')
+          return Promise.reject(new Error('Áudio vazio'))
+        }
         const objectUrl = URL.createObjectURL(blob)
         const audio = new Audio(objectUrl)
         ttsAudioRef.current = audio
@@ -137,11 +162,15 @@ export function Conversation() {
             resolve()
           }
           audio.onerror = (e) => {
+            console.error('[TTS] Erro ao tocar áudio:', e)
             URL.revokeObjectURL(objectUrl)
             ttsAudioRef.current = null
             reject(e)
           }
-          audio.play().catch(reject)
+          audio.play().catch((e) => {
+            console.error('[TTS] audio.play() falhou:', e)
+            reject(e)
+          })
         })
       })
   }
@@ -164,8 +193,12 @@ export function Conversation() {
       onEnd?.()
     }
     playTTSViaAPI(text)
-      .then(finish)
-      .catch(() => {
+      .then(() => {
+        console.log('[TTS] Reprodução concluída')
+        finish()
+      })
+      .catch((err) => {
+        console.warn('[TTS] API falhou, tentando fallback nativo:', err?.message || err)
         if (typeof window === 'undefined' || !window.speechSynthesis) {
           finish()
           return
@@ -209,12 +242,7 @@ export function Conversation() {
     userStoppedRef.current = false
     listeningModeRef.current = 'voice'
     setVoiceOverlayState('listening')
-    try {
-      recognitionRef.current.start()
-      setIsListening(true)
-    } catch {
-      /* ignore */
-    }
+    safeRecognitionStart('maybeRestartVoiceListening')
   }
 
   useEffect(() => {
@@ -276,8 +304,7 @@ export function Conversation() {
         if (canRestart) {
           setTimeout(() => {
             try {
-              recognitionRef.current?.start()
-              setIsListening(true)
+              safeRecognitionStart('onend_restart')
             } catch {
               transcriptRef.current = ''
               listeningModeRef.current = null
@@ -304,14 +331,13 @@ export function Conversation() {
         if (text) {
           sendMessageWithOptionsRef.current(text, { voice_mode: true, from_transcription: true })
         } else if (isVoiceModeRef.current && recognitionRef.current) {
-          // Silêncio sem texto – reinicia escuta
           transcriptRef.current = ''
           userStoppedRef.current = false
           listeningModeRef.current = 'voice'
+          setVoiceOverlayState('listening')
           setTimeout(() => {
             try {
-              recognitionRef.current?.start()
-              setIsListening(true)
+              safeRecognitionStart('onend_voice')
             } catch {
               /* ignore */
             }
@@ -334,8 +360,7 @@ export function Conversation() {
           setVoiceOverlayState('listening')
           setTimeout(() => {
             try {
-              recognitionRef.current?.start()
-              setIsListening(true)
+              safeRecognitionStart('onerror_restart')
             } catch {
               listeningModeRef.current = null
             }
@@ -367,15 +392,47 @@ export function Conversation() {
     listeningModeRef.current = mode
     // Modo conversa: reconhecer em inglês (prática); transcrever/input em pt-BR
     rec.lang = mode === 'voice' ? 'en-US' : 'pt-BR'
+    if (mode === 'transcribe') setIsTranscribing(true)
     try {
-      rec.start()
-      setIsListening(true)
-      if (mode === 'transcribe') setIsTranscribing(true)
+      safeRecognitionStart('startListening_' + mode)
     } catch (e) {
       console.error('Erro ao iniciar reconhecimento de voz:', e)
       listeningModeRef.current = null
       if (mode === 'transcribe') setIsTranscribing(false)
     }
+  }
+
+  /** Evita InvalidStateError "recognition has already started": stop() antes e retry em caso de erro. */
+  function safeRecognitionStart(callerId: string) {
+    const rec = recognitionRef.current
+    if (!rec) return
+    if (recognitionStartingRef.current) return
+    recognitionStartingRef.current = true
+    try {
+      rec.stop()
+    } catch {
+      /* ignore */
+    }
+    const doStart = () => {
+      if (!recognitionRef.current) {
+        recognitionStartingRef.current = false
+        return
+      }
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'InvalidStateError') {
+          try { recognitionRef.current?.stop() } catch { /* ignore */ }
+          setTimeout(() => { recognitionStartingRef.current = false; safeRecognitionStart(callerId + '_retry') }, 100)
+          return
+        }
+        recognitionStartingRef.current = false
+        throw e
+      }
+      setTimeout(() => { recognitionStartingRef.current = false }, 400)
+    }
+    setTimeout(doStart, 60)
   }
 
   function stopListening() {
@@ -652,8 +709,7 @@ export function Conversation() {
                 setVoiceOverlayState('listening')
                 setTimeout(() => {
                   try {
-                    recognitionRef.current?.start()
-                    setIsListening(true)
+                    safeRecognitionStart('btn_reiniciar')
                   } catch {
                     /* ignore */
                   }
