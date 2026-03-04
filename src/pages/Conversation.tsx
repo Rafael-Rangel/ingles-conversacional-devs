@@ -57,6 +57,7 @@ export function Conversation() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSpeakingRef = useRef(false)
+  const ttsUnlockedRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const transcriptRef = useRef<string>('')
   const userStoppedRef = useRef(false)
@@ -88,17 +89,27 @@ export function Conversation() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function unlockTTS() {
+    if (ttsUnlockedRef.current || typeof window === 'undefined' || !window.speechSynthesis) return
+    ttsUnlockedRef.current = true
+    window.speechSynthesis.getVoices()
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices()
+    }
+  }
+
   const speak = useCallback((text: string, onEnd?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !text?.trim()) {
       onEnd?.()
       return
     }
+    unlockTTS()
     window.speechSynthesis.cancel()
     if (isVoiceModeRef.current) {
       isSpeakingRef.current = true
       setVoiceOverlayState('speaking')
     }
-    const u = new SpeechSynthesisUtterance(text)
+    const u = new SpeechSynthesisUtterance(text.trim())
     u.lang = 'en-US'
     u.rate = 0.9
     utteranceRef.current = u
@@ -108,7 +119,13 @@ export function Conversation() {
         onEnd()
       }
     }
-    window.speechSynthesis.speak(u)
+    u.onerror = (e) => {
+      console.warn('TTS error:', e)
+      isSpeakingRef.current = false
+      onEnd?.()
+    }
+    window.speechSynthesis.resume?.()
+    setTimeout(() => window.speechSynthesis.speak(u), 50)
     // Inicia escuta durante TTS (modo voz) para detectar interrupção
     if (isVoiceModeRef.current && SpeechRecognitionAPI && recognitionRef.current) {
       try {
@@ -198,6 +215,8 @@ export function Conversation() {
 
       if (!userStoppedRef.current) {
         userStoppedRef.current = false
+        // Modo voz com transcript: não reiniciar – o timer de 1,2s vai parar e enviar
+        if (mode === 'voice' && text) return
         const canRestart = (mode === 'transcribe' || mode === 'voice' || mode === 'input') && recognitionRef.current
         if (canRestart) {
           setTimeout(() => {
@@ -287,6 +306,7 @@ export function Conversation() {
 
   function toggleTranscribe() {
     if (!conversationId) return
+    unlockTTS()
     if (isTranscribing || isListening) {
       stopListening()
       return
@@ -296,6 +316,7 @@ export function Conversation() {
 
   function toggleVoiceMode() {
     if (!conversationId) return
+    unlockTTS()
     if (isVoiceMode) {
       setIsVoiceMode(false)
       setVoiceOverlayState('listening')
@@ -618,7 +639,7 @@ export function Conversation() {
             </p>
             <button
               type="button"
-              onClick={startConversation}
+              onClick={() => { unlockTTS(); startConversation() }}
               disabled={loading || !lesson}
               className="btn-primary"
             >
@@ -649,7 +670,7 @@ export function Conversation() {
             {m.role === 'teacher' && (
               <button
                 type="button"
-                onClick={() => speak(m.content)}
+                onClick={() => { unlockTTS(); speak(m.content) }}
                 style={{
                   alignSelf: 'flex-start',
                   display: 'inline-flex',
@@ -840,7 +861,7 @@ export function Conversation() {
             />
             <button
               type="button"
-              onClick={sendMessage}
+              onClick={() => { unlockTTS(); sendMessage() }}
               disabled={loading || !input.trim()}
               className="btn-primary"
               style={{ padding: '12px 18px', flexShrink: 0 }}
